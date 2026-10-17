@@ -1,10 +1,10 @@
 use egui::{
-    Color32, CornerRadius, FontId, Frame, InnerResponse, Margin, Response, Sense,
-    Stroke, StrokeKind, TextStyle, Ui, Vec2, pos2, vec2,
+    Color32, CornerRadius, FontId, Frame, InnerResponse, Margin, Response, Sense, Stroke,
+    StrokeKind, TextStyle, Ui, Vec2, pos2, vec2,
 };
 
-use crate::{Bevel, Palette, paint_bevel};
 use crate::theme::palette_for;
+use crate::{Bevel, Palette, paint_bevel};
 
 /// A rectangular push button with a raised or pressed Win95 edge.
 #[derive(Clone, Debug)]
@@ -207,17 +207,24 @@ pub fn horizontal_separator(ui: &mut Ui) -> Response {
 
 /// Draw a two-tone etched rule using a custom palette.
 pub fn horizontal_separator_with_palette(ui: &mut Ui, palette: &Palette) -> Response {
-    let width = ui.available_width().max(1.0);
+    // Child UIs can report a minimum width larger than their visible column.
+    // Keep separators inside both the active layout and its clipping region.
+    let available = ui.available_rect_before_wrap();
+    let right = available.right().min(ui.clip_rect().right() - 1.0);
+    let width = (right - available.left()).max(1.0);
     let (rect, response) = ui.allocate_exact_size(vec2(width, 2.0), Sense::hover());
     let painter = ui.painter();
     painter.line_segment(
-        [pos2(rect.left(), rect.top() + 0.5), pos2(rect.right(), rect.top() + 0.5)],
+        [
+            pos2(rect.left(), rect.top() + 0.5),
+            pos2(rect.right() - 0.5, rect.top() + 0.5),
+        ],
         Stroke::new(1.0, palette.highlight),
     );
     painter.line_segment(
         [
             pos2(rect.left(), rect.bottom() - 0.5),
-            pos2(rect.right(), rect.bottom() - 0.5),
+            pos2(rect.right() - 0.5, rect.bottom() - 0.5),
         ],
         Stroke::new(1.0, palette.shadow),
     );

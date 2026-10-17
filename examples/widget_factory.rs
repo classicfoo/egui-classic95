@@ -1,9 +1,11 @@
 #![allow(clippy::too_many_lines)]
 
 use eframe::egui;
+use egui::scroll_area::ScrollBarVisibility;
 use egui::{
-    Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Margin, PointerButton, Rect, Response,
-    RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, ViewportCommand, pos2, vec2,
+    Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Margin, PointerButton, Rect,
+    ResizeDirection, Response, RichText, Sense, Stroke, StrokeKind, Ui, UiBuilder, ViewportCommand,
+    pos2, vec2,
 };
 use egui_classic95::{
     Bevel, BevelFrame, Classic95, ClassicButton, Palette, horizontal_separator_with_palette,
@@ -16,6 +18,7 @@ fn main() -> eframe::Result {
             .with_inner_size([1180.0, 820.0])
             .with_min_inner_size([960.0, 680.0])
             .with_decorations(false)
+            .with_resizable(true)
             .with_title("Widget Factory"),
         ..Default::default()
     };
@@ -64,6 +67,10 @@ impl Page {
             Self::Palette => "Palette",
         }
     }
+
+    fn index(self) -> usize {
+        Self::ALL.iter().position(|page| *page == self).unwrap_or(0)
+    }
 }
 
 struct FactoryApp {
@@ -74,6 +81,8 @@ struct FactoryApp {
     password: String,
     notes: String,
     accepted: bool,
+    enabled_option: bool,
+    classic_spacing: bool,
     radio_choice: usize,
     combo_choice: String,
     slider: f32,
@@ -81,6 +90,11 @@ struct FactoryApp {
     active_tab: usize,
     last_action: String,
     widget_probe: String,
+    catalog_scroll: f32,
+    scrollbar_drag_start: Option<f32>,
+    show_toolbar: bool,
+    show_status_bar: bool,
+    show_inspector: bool,
 }
 
 impl Default for FactoryApp {
@@ -93,20 +107,27 @@ impl Default for FactoryApp {
             password: "win95".to_owned(),
             notes: "Type here to try the recessed multiline editor.".to_owned(),
             accepted: true,
+            enabled_option: false,
+            classic_spacing: true,
             radio_choice: 0,
             combo_choice: "Standard".to_owned(),
             slider: 68.0,
             progress: 42.0,
             active_tab: 0,
             last_action: "Ready. Click a control to inspect it.".to_owned(),
-            widget_probe: "No widget sampled yet".to_owned(),
+            widget_probe: "No control selected".to_owned(),
+            catalog_scroll: 0.0,
+            scrollbar_drag_start: None,
+            show_toolbar: true,
+            show_status_bar: true,
+            show_inspector: true,
         }
     }
 }
 
 impl eframe::App for FactoryApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        egui::Rgba::from(self.theme.palette.desktop).to_array()
+        egui::Rgba::from(self.theme.palette.face).to_array()
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
@@ -116,11 +137,10 @@ impl eframe::App for FactoryApp {
         }
 
         let full_rect = ui.max_rect();
-        let desktop = self.theme.palette.desktop;
         ui.painter()
-            .rect_filled(full_rect, CornerRadius::ZERO, desktop);
+            .rect_filled(full_rect, CornerRadius::ZERO, self.theme.palette.face);
 
-        let window_rect = full_rect.shrink(10.0);
+        let window_rect = full_rect.shrink(1.0);
         ui.painter()
             .rect_filled(window_rect, CornerRadius::ZERO, self.theme.palette.face);
         paint_bevel(
@@ -134,26 +154,37 @@ impl eframe::App for FactoryApp {
         ui.scope_builder(UiBuilder::new().max_rect(content_rect), |ui| {
             ui.set_min_size(content_rect.size());
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            self.draw_window(ui);
+            self.draw_window(ui, content_rect.width());
         });
+        self.resize_handles(ui, window_rect);
     }
 }
 
 impl FactoryApp {
-    fn draw_window(&mut self, ui: &mut Ui) {
+    fn draw_window(&mut self, ui: &mut Ui, layout_width: f32) {
         let p = self.theme.palette;
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             self.title_bar(ui, p);
             self.menu_bar(ui);
-            self.toolbar(ui, p);
-            ui.add_space(5.0);
+            if self.show_toolbar {
+                self.toolbar(ui, p);
+            }
 
-            let main_height = (ui.available_height() - 27.0).max(250.0);
-            let total_width = ui.available_width();
+            let status_height = if self.show_status_bar { 26.0 } else { 0.0 };
+            let main_height = (ui.available_height() - status_height).max(250.0);
             let nav_width = 176.0;
             let inspector_width = 220.0;
-            let content_width = (total_width - nav_width - inspector_width - 12.0).max(320.0);
+            let inspector_gap = if self.show_inspector { 12.0 } else { 6.0 };
+            let content_width = (layout_width
+                - nav_width
+                - if self.show_inspector {
+                    inspector_width
+                } else {
+                    0.0
+                }
+                - inspector_gap)
+                .max(320.0);
 
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
@@ -167,15 +198,19 @@ impl FactoryApp {
                     Layout::top_down(Align::Min),
                     |ui| self.draw_catalog(ui, p),
                 );
-                ui.allocate_ui_with_layout(
-                    vec2(inspector_width, main_height),
-                    Layout::top_down(Align::Min),
-                    |ui| self.draw_inspector(ui, p),
-                );
+                if self.show_inspector {
+                    ui.allocate_ui_with_layout(
+                        vec2(inspector_width, main_height),
+                        Layout::top_down(Align::Min),
+                        |ui| self.draw_inspector(ui, p),
+                    );
+                }
             });
 
-            ui.add_space(5.0);
-            self.status_bar(ui, p);
+            if self.show_status_bar {
+                ui.add_space(5.0);
+                self.status_bar(ui, p);
+            }
         });
     }
 
@@ -184,25 +219,59 @@ impl FactoryApp {
         let (rect, _) = ui.allocate_exact_size(vec2(width, 27.0), Sense::hover());
         let painter = ui.painter();
         painter.rect_filled(rect, CornerRadius::ZERO, p.active_title);
-        draw_app_icon(painter, rect.left_top() + vec2(7.0, 6.0));
+        let icon_rect = Rect::from_min_size(rect.left_top() + vec2(5.0, 5.0), vec2(16.0, 16.0));
+        draw_app_icon(painter, icon_rect);
         painter.text(
-            pos2(rect.left() + 31.0, rect.center().y),
+            pos2(rect.left() + 27.0, rect.center().y),
             Align2::LEFT_CENTER,
-            "Widget Factory - egui-classic95",
+            "Widget Factory",
             FontId::proportional(13.0),
             p.title_text,
         );
 
         let controls_width = 3.0 * 18.0 + 2.0 * 3.0;
         let controls_left = rect.right() - controls_width - 5.0;
-        let drag_rect = Rect::from_min_max(rect.min, pos2(controls_left - 3.0, rect.bottom()));
-        let drag = ui.interact(drag_rect, Id::new("factory-title-drag"), Sense::click_and_drag());
+        let drag_rect = Rect::from_min_max(
+            pos2(icon_rect.right() + 2.0, rect.top()),
+            pos2(controls_left - 3.0, rect.bottom()),
+        );
+        let drag = ui.interact(
+            drag_rect,
+            Id::unique("factory-title-drag"),
+            Sense::click_and_drag(),
+        );
         if drag.drag_started_by(PointerButton::Primary) {
             ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
         }
 
-        let y = rect.center().y - 7.0;
-        let min_rect = Rect::from_min_size(pos2(controls_left, y), vec2(18.0, 14.0));
+        let icon_response =
+            ui.interact(icon_rect, Id::unique("factory-system-menu"), Sense::click());
+        egui::Popup::menu(&icon_response).show(|ui| {
+            let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
+            if ui
+                .add_enabled(maximized, egui::Button::new("Restore"))
+                .clicked()
+            {
+                ui.ctx()
+                    .send_viewport_cmd(ViewportCommand::Maximized(false));
+            }
+            if ui.button("Minimize").clicked() {
+                ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
+            }
+            if ui
+                .add_enabled(!maximized, egui::Button::new("Maximize"))
+                .clicked()
+            {
+                ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
+            }
+            ui.separator();
+            if ui.button("Close").clicked() {
+                ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+            }
+        });
+
+        let y = rect.center().y - 9.0;
+        let min_rect = Rect::from_min_size(pos2(controls_left, y), vec2(18.0, 18.0));
         let max_rect = min_rect.translate(vec2(21.0, 0.0));
         let close_rect = min_rect.translate(vec2(42.0, 0.0));
         if caption_button(ui, min_rect, "factory-minimize", CaptionGlyph::Minimize, p).clicked() {
@@ -210,7 +279,12 @@ impl FactoryApp {
         }
 
         let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
-        if caption_button(ui, max_rect, "factory-maximize", CaptionGlyph::Maximize, p).clicked() {
+        let max_glyph = if maximized {
+            CaptionGlyph::Restore
+        } else {
+            CaptionGlyph::Maximize
+        };
+        if caption_button(ui, max_rect, "factory-maximize", max_glyph, p).clicked() {
             ui.ctx()
                 .send_viewport_cmd(ViewportCommand::Maximized(!maximized));
         }
@@ -220,139 +294,389 @@ impl FactoryApp {
     }
 
     fn menu_bar(&mut self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing = vec2(3.0, 0.0);
-            ui.add_space(4.0);
-            ui.menu_button("File", |ui| {
-                if ui.button("Reset samples").clicked() {
-                    self.reset_samples();
-                }
-                ui.separator();
-                if ui.button("Exit").clicked() {
-                    ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-                }
+        let p = self.theme.palette;
+        let menu_style = move |style: &mut egui::Style| {
+            egui::menu::menu_style(style);
+            for visuals in [
+                &mut style.visuals.widgets.hovered,
+                &mut style.visuals.widgets.active,
+                &mut style.visuals.widgets.open,
+            ] {
+                visuals.bg_fill = p.selection;
+                visuals.weak_bg_fill = p.selection;
+                visuals.fg_stroke.color = p.selection_text;
+            }
+        };
+        egui::MenuBar::new()
+            .style(menu_style)
+            .config(egui::menu::MenuConfig::new().style(menu_style))
+            .ui(ui, |ui| {
+                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                ui.add_space(4.0);
+                ui.menu_button("File", |ui| {
+                    ui.set_width(190.0);
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    if ui.button("Reset samples").clicked() {
+                        self.reset_samples();
+                    }
+                    classic_menu_separator(ui, p);
+                    ui.menu_button("Open page", |ui| {
+                        ui.set_width(190.0);
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        for page in Page::ALL {
+                            if classic_menu_choice(ui, self.page == page, page.label(), p).clicked()
+                            {
+                                self.page = page;
+                                self.catalog_scroll = 0.0;
+                                self.last_action = format!("Opened {}", page.label());
+                            }
+                        }
+                    });
+                    ui.menu_button("Options", |ui| {
+                        ui.set_width(190.0);
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        classic_menu_toggle(ui, &mut self.show_toolbar, "Show toolbar", p);
+                        classic_menu_toggle(ui, &mut self.show_status_bar, "Show status bar", p);
+                        classic_menu_toggle(ui, &mut self.show_inspector, "Show details pane", p);
+                    });
+                    classic_menu_separator(ui, p);
+                    if ui.button("Exit").clicked() {
+                        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+                    }
+                });
+                ui.menu_button("Edit", |ui| {
+                    ui.set_width(190.0);
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    if ui.button("Clear notes").clicked() {
+                        self.notes.clear();
+                        self.last_action = "Notes cleared".to_owned();
+                    }
+                    if ui.button("Copy name").clicked() {
+                        ui.ctx().copy_text(self.name.clone());
+                        self.last_action = "Name copied to the clipboard".to_owned();
+                    }
+                });
+                ui.menu_button("View", |ui| {
+                    ui.set_width(190.0);
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    for page in Page::ALL {
+                        if classic_menu_choice(ui, self.page == page, page.label(), p).clicked() {
+                            self.page = page;
+                            self.catalog_scroll = 0.0;
+                            self.last_action = format!("Opened {}", page.label());
+                        }
+                    }
+                    classic_menu_separator(ui, p);
+                    classic_menu_toggle(ui, &mut self.show_toolbar, "Toolbar", p);
+                    classic_menu_toggle(ui, &mut self.show_status_bar, "Status bar", p);
+                    classic_menu_toggle(ui, &mut self.show_inspector, "Details pane", p);
+                });
+                ui.menu_button("Help", |ui| {
+                    ui.set_width(190.0);
+                    ui.spacing_mut().item_spacing.y = 0.0;
+                    ui.label("Widget Factory");
+                    ui.label("A control gallery for egui-classic95.");
+                });
             });
-            ui.menu_button("Edit", |ui| {
-                if ui.button("Clear notes").clicked() {
-                    self.notes.clear();
-                    self.last_action = "Notes cleared".to_owned();
-                }
-                if ui.button("Select all samples").clicked() {
-                    self.last_action = "Sample controls are ready for input".to_owned();
-                }
-            });
-            ui.menu_button("View", |ui| {
-                for page in Page::ALL {
-                    ui.radio_value(&mut self.page, page, page.label());
-                }
-            });
-            ui.menu_button("Help", |ui| {
-                ui.label("Widget Factory");
-                ui.label("A control gallery for egui-classic95.");
-            });
-        });
         horizontal_separator_with_palette(ui, &self.theme.palette);
     }
 
     fn toolbar(&mut self, ui: &mut Ui, p: Palette) {
         ui.horizontal(|ui| {
             ui.add_space(5.0);
-            if ClassicButton::new("Catalog")
-                .palette(p)
-                .min_size(vec2(76.0, 24.0))
-                .show(ui)
-                .clicked()
-            {
+            if toolbar_icon_button(ui, p, "Catalog", ToolbarGlyph::Catalog).clicked() {
                 self.page = Page::Overview;
+                self.catalog_scroll = 0.0;
                 self.last_action = "Catalog opened".to_owned();
             }
-            if ClassicButton::new("Reset")
-                .palette(p)
-                .min_size(vec2(68.0, 24.0))
-                .show(ui)
-                .clicked()
-            {
+            if toolbar_icon_button(ui, p, "Reset samples", ToolbarGlyph::Reset).clicked() {
                 self.reset_samples();
             }
-            horizontal_separator_with_palette(ui, &p);
+            vertical_separator_with_palette(ui, &p);
             ui.add_space(5.0);
-            ui.label(RichText::new("Style:").small());
-            egui::ComboBox::from_id_salt("factory-style-picker")
-                .selected_text("Windows 95")
-                .width(120.0)
-                .show_ui(ui, |ui| {
-                    ui.label("Windows 95");
-                    ui.label("System palette");
-                });
+            ui.label(RichText::new("Control Gallery").small());
         });
         horizontal_separator_with_palette(ui, &p);
     }
 
     fn draw_navigation(&mut self, ui: &mut Ui, p: Palette) {
+        ui.set_min_width(ui.available_width());
+        ui.label(RichText::new("Controls").strong());
+        ui.add_space(3.0);
         BevelFrame::sunken()
             .palette(p)
             .fill(p.input)
-            .inner_margin(Margin::same(7))
+            .inner_margin(Margin::same(1))
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
-                ui.label(RichText::new("CONTROL CATALOG").strong().small());
-                ui.add_space(5.0);
-                horizontal_separator_with_palette(ui, &p);
-                ui.add_space(5.0);
                 for page in Page::ALL {
                     let response = ui.selectable_value(&mut self.page, page, page.label());
                     if response.clicked() {
                         self.last_action = format!("Opened {}", page.label());
+                        self.catalog_scroll = 0.0;
                     }
                 }
-                ui.add_space(12.0);
-                ui.label(RichText::new("STATE KEY").strong().small());
-                ui.add_space(4.0);
-                ui.label("Raised  - available");
-                ui.label("Sunken  - editable");
-                ui.label("Navy    - selected");
-                ui.add_space(8.0);
-                ui.small("Try each sample, then read its current state in the inspector.");
             });
+        ui.add_space(8.0);
+        ui.label(RichText::new("Classic edges").strong());
+        edge_legend(ui, p, "Button", LegendStyle::Raised);
+        edge_legend(ui, p, "Field", LegendStyle::Sunken);
+        edge_legend(ui, p, "Selected", LegendStyle::Selected);
     }
 
     fn draw_catalog(&mut self, ui: &mut Ui, p: Palette) {
-        egui::ScrollArea::vertical()
-            .id_salt("factory-catalog-scroll")
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                match self.page {
-                    Page::Overview => {
-                        section(ui, p, "Widget Factory", "LIVE SHOWCASE", |ui| {
-                            ui.label("Every sample is a working egui control. Edit values, change selections, and press buttons to exercise the theme in place.");
-                            ui.add_space(4.0);
-                            ui.horizontal(|ui| {
-                                feature_chip(ui, p, "7 catalog pages");
-                                feature_chip(ui, p, "Editable controls");
-                                feature_chip(ui, p, "Live palette");
-                            });
-                        });
-                        self.show_buttons(ui, p);
-                        self.show_text_fields(ui, p);
-                        self.show_selection(ui, p);
-                        self.show_ranges(ui, p);
-                        self.show_containers(ui, p);
-                        self.show_palette(ui, p);
-                    }
-                    Page::Buttons => self.show_buttons(ui, p),
-                    Page::TextFields => self.show_text_fields(ui, p),
-                    Page::Selection => self.show_selection(ui, p),
-                    Page::Ranges => self.show_ranges(ui, p),
-                    Page::Containers => self.show_containers(ui, p),
-                    Page::Palette => self.show_palette(ui, p),
+        let region = ui.available_size();
+        let bar_width = 16.0;
+        let viewport_width = (region.x - bar_width).max(1.0);
+        ui.horizontal(|ui| {
+            let scroll = ui.allocate_ui_with_layout(
+                vec2(viewport_width, region.y),
+                Layout::top_down(Align::Min),
+                |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("factory-catalog-scroll")
+                        .scroll_offset(vec2(0.0, self.catalog_scroll))
+                        .scroll_bar_visibility(ScrollBarVisibility::AlwaysHidden)
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.set_min_width(ui.available_width());
+                            self.draw_page_contents(ui, p);
+                        })
+                },
+            );
+            let output = scroll.inner;
+            let max_scroll = (output.content_size.y - output.inner_rect.height()).max(0.0);
+            self.catalog_scroll = output.state.clamped_offset().y.clamp(0.0, max_scroll);
+            self.draw_catalog_scrollbar(ui, p, region.y, max_scroll, output.inner_rect.height());
+        });
+    }
+
+    fn draw_catalog_scrollbar(
+        &mut self,
+        ui: &mut Ui,
+        p: Palette,
+        height: f32,
+        max_scroll: f32,
+        viewport_height: f32,
+    ) {
+        let (bar_rect, _) = ui.allocate_exact_size(vec2(16.0, height), Sense::hover());
+        if max_scroll <= 0.0 || height < 36.0 {
+            return;
+        }
+
+        let arrow_size = 16.0_f32.min(height * 0.5);
+        let up_rect = Rect::from_min_size(bar_rect.min, vec2(16.0, arrow_size));
+        let down_rect = Rect::from_min_size(
+            pos2(bar_rect.left(), bar_rect.bottom() - arrow_size),
+            vec2(16.0, arrow_size),
+        );
+        if scroll_arrow_button(ui, up_rect, "catalog-scroll-up", p, false).clicked() {
+            self.catalog_scroll = (self.catalog_scroll - 32.0).max(0.0);
+        }
+        if scroll_arrow_button(ui, down_rect, "catalog-scroll-down", p, true).clicked() {
+            self.catalog_scroll = (self.catalog_scroll + 32.0).min(max_scroll);
+        }
+
+        let track_rect = Rect::from_min_max(
+            pos2(bar_rect.left(), up_rect.bottom()),
+            pos2(bar_rect.right(), down_rect.top()),
+        );
+        let track_response = ui.interact(
+            track_rect,
+            Id::unique("catalog-scroll-track"),
+            Sense::click(),
+        );
+        ui.painter()
+            .rect_filled(track_rect, CornerRadius::ZERO, p.light);
+        for y in (track_rect.top() as i32..track_rect.bottom() as i32).step_by(2) {
+            for x in (track_rect.left() as i32..track_rect.right() as i32).step_by(2) {
+                if ((x / 2) + (y / 2)) & 1 == 0 {
+                    ui.painter().rect_filled(
+                        Rect::from_min_size(pos2(x as f32, y as f32), vec2(2.0, 2.0)),
+                        CornerRadius::ZERO,
+                        p.highlight,
+                    );
                 }
-            });
+            }
+        }
+
+        let track_height = track_rect.height().max(1.0);
+        let content_height = viewport_height + max_scroll;
+        let thumb_height = ((track_height * viewport_height / content_height.max(1.0)).max(18.0))
+            .min(track_height);
+        let thumb_travel = (track_height - thumb_height).max(0.0);
+        let thumb_top =
+            track_rect.top() + thumb_travel * (self.catalog_scroll / max_scroll).clamp(0.0, 1.0);
+        let thumb_rect = Rect::from_min_size(
+            pos2(bar_rect.left(), thumb_top),
+            vec2(track_rect.width(), thumb_height),
+        );
+        let thumb = ui.interact(
+            thumb_rect,
+            Id::unique("catalog-scroll-thumb"),
+            Sense::drag(),
+        );
+        if track_response.clicked() && !thumb.hovered() {
+            let pointer_y = track_response
+                .interact_pointer_pos()
+                .map_or(thumb_rect.center().y, |pos| pos.y);
+            let direction = if pointer_y < thumb_rect.top() {
+                -1.0
+            } else {
+                1.0
+            };
+            self.catalog_scroll =
+                (self.catalog_scroll + direction * viewport_height * 0.85).clamp(0.0, max_scroll);
+        }
+        if thumb.drag_started() {
+            self.scrollbar_drag_start = Some(self.catalog_scroll);
+        }
+        if thumb.dragged() {
+            let start = self.scrollbar_drag_start.unwrap_or(self.catalog_scroll);
+            self.catalog_scroll = (start
+                + thumb.drag_delta().y * max_scroll / thumb_travel.max(1.0))
+            .clamp(0.0, max_scroll);
+        }
+        if thumb.drag_stopped() {
+            self.scrollbar_drag_start = None;
+        }
+        ui.painter()
+            .rect_filled(thumb_rect, CornerRadius::ZERO, p.face);
+        paint_bevel(
+            ui.painter(),
+            thumb_rect,
+            if thumb.is_pointer_button_down_on() {
+                Bevel::Pressed
+            } else {
+                Bevel::Raised
+            },
+            &p,
+        );
+        for offset in [-2.0, 0.0, 2.0] {
+            let y = thumb_rect.center().y + offset;
+            ui.painter().line_segment(
+                [
+                    pos2(thumb_rect.left() + 5.0, y),
+                    pos2(thumb_rect.right() - 5.0, y),
+                ],
+                Stroke::new(1.0, if offset < 0.0 { p.highlight } else { p.shadow }),
+            );
+        }
+    }
+
+    fn resize_handles(&self, ui: &mut Ui, rect: Rect) {
+        let edge = 5.0;
+        let corner = 9.0;
+        let handles = [
+            (
+                "resize-n",
+                Rect::from_min_max(
+                    pos2(rect.left() + corner, rect.top() - edge),
+                    pos2(rect.right() - corner, rect.top() + edge),
+                ),
+                ResizeDirection::North,
+                egui::CursorIcon::ResizeVertical,
+            ),
+            (
+                "resize-s",
+                Rect::from_min_max(
+                    pos2(rect.left() + corner, rect.bottom() - edge),
+                    pos2(rect.right() - corner, rect.bottom() + edge),
+                ),
+                ResizeDirection::South,
+                egui::CursorIcon::ResizeVertical,
+            ),
+            (
+                "resize-e",
+                Rect::from_min_max(
+                    pos2(rect.right() - edge, rect.top() + corner),
+                    pos2(rect.right() + edge, rect.bottom() - corner),
+                ),
+                ResizeDirection::East,
+                egui::CursorIcon::ResizeHorizontal,
+            ),
+            (
+                "resize-w",
+                Rect::from_min_max(
+                    pos2(rect.left() - edge, rect.top() + corner),
+                    pos2(rect.left() + edge, rect.bottom() - corner),
+                ),
+                ResizeDirection::West,
+                egui::CursorIcon::ResizeHorizontal,
+            ),
+            (
+                "resize-ne",
+                Rect::from_min_max(
+                    pos2(rect.right() - corner, rect.top() - corner),
+                    pos2(rect.right() + edge, rect.top() + edge),
+                ),
+                ResizeDirection::NorthEast,
+                egui::CursorIcon::ResizeNeSw,
+            ),
+            (
+                "resize-nw",
+                Rect::from_min_max(
+                    pos2(rect.left() - edge, rect.top() - corner),
+                    pos2(rect.left() + corner, rect.top() + edge),
+                ),
+                ResizeDirection::NorthWest,
+                egui::CursorIcon::ResizeNwSe,
+            ),
+            (
+                "resize-se",
+                Rect::from_min_max(
+                    pos2(rect.right() - corner, rect.bottom() - corner),
+                    pos2(rect.right() + edge, rect.bottom() + edge),
+                ),
+                ResizeDirection::SouthEast,
+                egui::CursorIcon::ResizeNwSe,
+            ),
+            (
+                "resize-sw",
+                Rect::from_min_max(
+                    pos2(rect.left() - edge, rect.bottom() - corner),
+                    pos2(rect.left() + corner, rect.bottom() + edge),
+                ),
+                ResizeDirection::SouthWest,
+                egui::CursorIcon::ResizeNeSw,
+            ),
+        ];
+        for (id, handle_rect, direction, cursor) in handles {
+            let response = ui
+                .interact(handle_rect, Id::unique(id), Sense::drag())
+                .on_hover_cursor(cursor);
+            if response.drag_started_by(PointerButton::Primary) {
+                ui.ctx()
+                    .send_viewport_cmd(ViewportCommand::BeginResize(direction));
+            }
+        }
+    }
+
+    fn draw_page_contents(&mut self, ui: &mut Ui, p: Palette) {
+        match self.page {
+            Page::Overview => {
+                section(ui, p, "Control gallery", |ui| {
+                    ui.label("Try the controls below or choose a category from the catalog.");
+                });
+                self.show_buttons(ui, p);
+                self.show_text_fields(ui, p);
+                self.show_selection(ui, p);
+                self.show_ranges(ui, p);
+                self.show_containers(ui, p);
+                self.show_palette(ui, p);
+            }
+            Page::Buttons => self.show_buttons(ui, p),
+            Page::TextFields => self.show_text_fields(ui, p),
+            Page::Selection => self.show_selection(ui, p),
+            Page::Ranges => self.show_ranges(ui, p),
+            Page::Containers => self.show_containers(ui, p),
+            Page::Palette => self.show_palette(ui, p),
+        }
     }
 
     fn show_buttons(&mut self, ui: &mut Ui, p: Palette) {
-        section(ui, p, "Command buttons", "PUSH / DEFAULT / DISABLED", |ui| {
-            ui.label("A raised edge becomes a sunken edge while the pointer is down.");
+        section(ui, p, "Command buttons", |ui| {
+            ui.label("The button edge turns inward while pressed.");
             ui.add_space(7.0);
             ui.horizontal(|ui| {
                 let normal = ClassicButton::new("Apply")
@@ -383,32 +707,35 @@ impl FactoryApp {
             });
             ui.add_space(7.0);
             ui.horizontal(|ui| {
-                if ClassicButton::new("Copy selection")
+                if ClassicButton::new("Copy name")
                     .palette(p)
                     .show(ui)
                     .clicked()
                 {
-                    self.last_action = "Copy selection clicked".to_owned();
+                    ui.ctx().copy_text(self.name.clone());
+                    self.last_action = "Name copied to the clipboard".to_owned();
                 }
                 if ClassicButton::new("Run sample")
                     .palette(p)
                     .show(ui)
                     .clicked()
                 {
-                    self.last_action = "Run sample clicked".to_owned();
+                    self.progress = 100.0;
+                    self.last_action = "Sample run complete".to_owned();
                 }
             });
         });
     }
 
     fn show_text_fields(&mut self, ui: &mut Ui, p: Palette) {
-        section(ui, p, "Text fields", "SINGLE LINE / PASSWORD / MULTILINE", |ui| {
+        section(ui, p, "Text fields", |ui| {
             ui.horizontal(|ui| {
                 ui.label("Name:");
-                let response = ui.add_sized(
-                    [ui.available_width(), 24.0],
-                    egui::TextEdit::singleline(&mut self.name)
-                        .hint_text("Enter a name"),
+                let response = classic_text_edit(
+                    ui,
+                    vec2(ui.available_width(), 24.0),
+                    egui::TextEdit::singleline(&mut self.name).hint_text("Enter a name"),
+                    p,
                 );
                 if response.changed() {
                     self.last_action = "Name field edited".to_owned();
@@ -418,11 +745,13 @@ impl FactoryApp {
             ui.add_space(5.0);
             ui.horizontal(|ui| {
                 ui.label("Password:");
-                let response = ui.add_sized(
-                    [ui.available_width(), 24.0],
+                let response = classic_text_edit(
+                    ui,
+                    vec2(ui.available_width(), 24.0),
                     egui::TextEdit::singleline(&mut self.password)
                         .password(true)
                         .hint_text("Password"),
+                    p,
                 );
                 if response.changed() {
                     self.last_action = "Password field edited".to_owned();
@@ -431,11 +760,13 @@ impl FactoryApp {
             });
             ui.add_space(5.0);
             ui.label("Notes:");
-            let response = ui.add_sized(
-                [ui.available_width(), 72.0],
+            let response = classic_text_edit(
+                ui,
+                vec2(ui.available_width(), 72.0),
                 egui::TextEdit::multiline(&mut self.notes)
                     .desired_rows(3)
                     .hint_text("Write a note..."),
+                p,
             );
             if response.changed() {
                 self.last_action = "Notes field edited".to_owned();
@@ -445,8 +776,8 @@ impl FactoryApp {
     }
 
     fn show_selection(&mut self, ui: &mut Ui, p: Palette) {
-        section(ui, p, "Selection controls", "CHECKBOX / RADIO / COMBO BOX", |ui| {
-            let response = ui.checkbox(&mut self.accepted, "Remember this choice");
+        section(ui, p, "Selection controls", |ui| {
+            let response = classic_checkbox(ui, &mut self.accepted, "Remember this choice", p);
             if response.changed() {
                 self.last_action = format!("Remember choice: {}", self.accepted);
             }
@@ -465,17 +796,31 @@ impl FactoryApp {
             ui.horizontal(|ui| {
                 ui.label("Display mode:");
                 let mut selection_changed = false;
-                let response = egui::ComboBox::from_id_salt("factory-display-mode")
-                    .selected_text(self.combo_choice.clone())
-                    .width(160.0)
-                    .show_ui(ui, |ui| {
-                        for option in ["Standard", "Large icons", "Details", "List"] {
-                            let choice =
-                                ui.selectable_value(&mut self.combo_choice, option.to_owned(), option);
-                            selection_changed |= choice.changed();
-                        }
+                let combo = BevelFrame::sunken()
+                    .palette(p)
+                    .fill(p.input)
+                    .inner_margin(Margin::same(1))
+                    .show(ui, |ui| {
+                        ui.visuals_mut().button_frame = false;
+                        egui::ComboBox::from_id_salt("factory-display-mode")
+                            .selected_text(self.combo_choice.clone())
+                            .width(156.0)
+                            .icon(move |ui, rect, _visuals, is_open| {
+                                draw_combo_arrow(ui, rect, p, is_open);
+                            })
+                            .show_ui(ui, |ui| {
+                                for option in ["Standard", "Large icons", "Details", "List"] {
+                                    let choice = ui.selectable_value(
+                                        &mut self.combo_choice,
+                                        option.to_owned(),
+                                        option,
+                                    );
+                                    selection_changed |= choice.changed();
+                                }
+                            })
                     })
-                    .response;
+                    .inner;
+                let response = combo.response;
                 if selection_changed {
                     self.last_action = format!("Display mode: {}", self.combo_choice);
                 }
@@ -485,23 +830,44 @@ impl FactoryApp {
     }
 
     fn show_ranges(&mut self, ui: &mut Ui, p: Palette) {
-        section(ui, p, "Ranges and feedback", "SLIDER / PROGRESS", |ui| {
-            let response = ui.add(
-                egui::Slider::new(&mut self.slider, 0.0..=100.0)
-                    .text("Volume")
-                    .suffix("%"),
-            );
+        section(ui, p, "Ranges and feedback", |ui| {
+            let response = ui
+                .horizontal(|ui| {
+                    ui.label("Volume:");
+                    let value_width = 36.0;
+                    let slider_width = (ui.available_width() - value_width - 4.0).max(100.0);
+                    ui.spacing_mut().slider_width = slider_width;
+                    let response = ui.add(
+                        egui::Slider::new(&mut self.slider, 0.0..=100.0)
+                            .show_value(false)
+                            .trailing_fill(false)
+                            .handle_shape(egui::style::HandleShape::Rect { aspect_ratio: 0.55 }),
+                    );
+                    draw_classic_slider(
+                        ui,
+                        p,
+                        response.rect,
+                        self.slider,
+                        response.is_pointer_button_down_on(),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(format!("{:.0}%", self.slider));
+                    response
+                })
+                .inner;
             if response.changed() {
                 self.last_action = format!("Slider moved to {:.0}%", self.slider);
             }
             self.observe("Volume slider", &response);
 
             ui.add_space(3.0);
-            ui.add(
-                egui::ProgressBar::new((self.progress / 100.0).clamp(0.0, 1.0))
-                    .desired_width(ui.available_width())
-                    .show_percentage(),
-            );
+            ui.horizontal(|ui| {
+                let value_width = 36.0;
+                let bar_width = (ui.available_width() - value_width - 7.0).max(96.0);
+                segmented_progress_bar(ui, p, bar_width, 18.0, self.progress);
+                ui.add_space(5.0);
+                ui.label(format!("{:.0}%", self.progress));
+            });
             ui.add_space(4.0);
             if ClassicButton::new("Advance progress")
                 .palette(p)
@@ -515,7 +881,7 @@ impl FactoryApp {
     }
 
     fn show_containers(&mut self, ui: &mut Ui, p: Palette) {
-        section(ui, p, "Containers", "RAISED / SUNKEN / TABS", |ui| {
+        section(ui, p, "Containers", |ui| {
             ui.horizontal(|ui| {
                 BevelFrame::raised()
                     .palette(p)
@@ -537,135 +903,168 @@ impl FactoryApp {
             });
 
             ui.add_space(7.0);
+            let titles = ["General", "Details", "About"];
+            let old_spacing = ui.spacing().item_spacing;
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let mut tab_rects = Vec::with_capacity(titles.len());
+            let mut tab_responses = Vec::with_capacity(titles.len());
             ui.horizontal(|ui| {
-                for (index, title) in ["General", "Details", "About"].into_iter().enumerate() {
-                    let response = ui.selectable_value(&mut self.active_tab, index, title);
+                for (index, title) in titles.into_iter().enumerate() {
+                    let width = match title {
+                        "General" => 76.0,
+                        "Details" => 72.0,
+                        _ => 64.0,
+                    };
+                    let (rect, response) =
+                        ui.allocate_exact_size(vec2(width, 22.0), Sense::click());
                     if response.clicked() {
+                        self.active_tab = index;
                         self.last_action = format!("Opened {title} tab");
                     }
-                    self.observe("Tab", &response);
+                    tab_rects.push(rect);
+                    tab_responses.push(response);
                 }
             });
             let active_tab = self.active_tab;
-            BevelFrame::sunken()
+            let panel = BevelFrame::sunken()
                 .palette(p)
-                .fill(p.input)
+                .fill(p.face)
                 .inner_margin(Margin::same(8))
-                .show(ui, |ui| match active_tab {
-                    0 => {
-                        ui.label("General settings live inside the selected page.");
-                        ui.checkbox(&mut self.accepted, "Enable this option");
-                    }
-                    1 => {
-                        ui.label("Details include the current sample values.");
-                        ui.label(format!("Name: {}", self.name));
-                    }
-                    _ => {
-                        ui.label("egui-classic95");
-                        ui.label("A small reusable Win95-inspired theme engine.");
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    match active_tab {
+                        0 => {
+                            ui.label("General settings live inside the selected page.");
+                            let response = classic_checkbox(
+                                ui,
+                                &mut self.enabled_option,
+                                "Enable this option",
+                                p,
+                            );
+                            if response.changed() {
+                                self.last_action =
+                                    format!("Option enabled: {}", self.enabled_option);
+                            }
+                        }
+                        1 => {
+                            ui.label("Details include the current sample values.");
+                            ui.label(format!("Name: {}", self.name));
+                        }
+                        _ => {
+                            ui.label("egui-classic95");
+                            ui.label("A small reusable Win95-inspired theme engine.");
+                        }
                     }
                 });
+            ui.spacing_mut().item_spacing = old_spacing;
+            for response in &tab_responses {
+                self.observe("Tab", response);
+            }
+            paint_classic_tabs(ui, p, &titles, &tab_rects, panel.response.rect, active_tab);
 
             ui.add_space(5.0);
-            egui::CollapsingHeader::new("Advanced options")
-                .default_open(false)
-                .show(ui, |ui| {
-                    ui.checkbox(&mut self.accepted, "Use classic spacing");
-                    ui.label("Collapsible groups keep secondary controls close by.");
-                });
+            section(ui, p, "Advanced options", |ui| {
+                let response =
+                    classic_checkbox(ui, &mut self.classic_spacing, "Use classic spacing", p);
+                if response.changed() {
+                    self.last_action = format!("Classic spacing: {}", self.classic_spacing);
+                }
+                ui.label("Secondary controls sit inside a labelled group box.");
+            });
         });
     }
 
     fn show_palette(&mut self, ui: &mut Ui, p: Palette) {
-        section(ui, p, "System palette", "EDIT COLORS LIVE", |ui| {
+        section(ui, p, "System palette", |ui| {
             ui.label("Change the color wells to see the theme update across the factory.");
             ui.add_space(6.0);
-            palette_editor(ui, "Desktop", &mut self.theme.palette.desktop);
             palette_editor(ui, "Window face", &mut self.theme.palette.face);
             palette_editor(ui, "Active title", &mut self.theme.palette.active_title);
             palette_editor(ui, "Selection", &mut self.theme.palette.selection);
             ui.add_space(5.0);
             ui.horizontal(|ui| {
-                swatch(ui, "Highlight", self.theme.palette.highlight, &self.theme.palette);
+                swatch(
+                    ui,
+                    "Highlight",
+                    self.theme.palette.highlight,
+                    &self.theme.palette,
+                );
                 swatch(ui, "Shadow", self.theme.palette.shadow, &self.theme.palette);
-                swatch(ui, "Dark edge", self.theme.palette.dark_shadow, &self.theme.palette);
+                swatch(
+                    ui,
+                    "Dark edge",
+                    self.theme.palette.dark_shadow,
+                    &self.theme.palette,
+                );
             });
         });
     }
 
     fn draw_inspector(&mut self, ui: &mut Ui, p: Palette) {
-        BevelFrame::sunken()
-            .palette(p)
-            .fill(p.input)
-            .inner_margin(Margin::same(8))
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                ui.label(RichText::new("INTERACTION PROBE").strong().small());
-                ui.add_space(4.0);
-                ui.label(RichText::new(&self.last_action).strong());
-                ui.add_space(5.0);
-                horizontal_separator_with_palette(ui, &p);
-                ui.add_space(5.0);
-                ui.label(RichText::new("Widget state").strong());
-                ui.label(&self.widget_probe);
-                ui.add_space(7.0);
-                ui.label(RichText::new("Current page").strong());
-                ui.label(self.page.label());
-                ui.add_space(7.0);
-                ui.label(RichText::new("Palette samples").strong());
-                swatch(ui, "Face", p.face, &p);
-                swatch(ui, "Active title", p.active_title, &p);
-                swatch(ui, "Selection", p.selection, &p);
-                swatch(ui, "Input", p.input, &p);
-                ui.add_space(7.0);
-                horizontal_separator_with_palette(ui, &p);
-                ui.add_space(6.0);
-                ui.label(RichText::new("Keyboard and pointer").strong());
-                ui.small("Tab to focus. Click to press. Drag sliders and scroll the catalog.");
-                ui.add_space(8.0);
-                ui.label(RichText::new("LIVE VALUES").strong().small());
-                ui.label(format!("Name: {}", self.name));
-                ui.label(format!("Choice: {}", self.combo_choice));
-                ui.label(format!("Volume: {:.0}%", self.slider));
-            });
+        ui.set_min_width(ui.available_width());
+        ui.label(RichText::new("Details").strong());
+        ui.add_space(2.0);
+        horizontal_separator_with_palette(ui, &p);
+        ui.add_space(5.0);
+        ui.label(RichText::new("Last action").strong());
+        ui.label(&self.last_action);
+        ui.add_space(7.0);
+        ui.label(RichText::new("Last control").strong());
+        ui.label(&self.widget_probe);
+        ui.add_space(7.0);
+        ui.label(RichText::new("Current page").strong());
+        ui.label(self.page.label());
+        ui.add_space(7.0);
+        horizontal_separator_with_palette(ui, &p);
+        ui.add_space(5.0);
+        ui.label(RichText::new("Sample values").strong());
+        ui.label(format!("Name: {}", self.name));
+        ui.label(format!("Display: {}", self.combo_choice));
+        ui.label(format!("Volume: {:.0}%", self.slider));
     }
 
     fn status_bar(&self, ui: &mut Ui, p: Palette) {
         let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 21.0), Sense::hover());
-        ui.painter()
-            .rect_filled(rect, CornerRadius::ZERO, p.face);
+        ui.painter().rect_filled(rect, CornerRadius::ZERO, p.face);
         paint_bevel(ui.painter(), rect, Bevel::Sunken, &p);
         ui.painter().text(
             rect.left_center() + vec2(6.0, 0.0),
             Align2::LEFT_CENTER,
-            format!("{}  |  egui-classic95", self.page.label()),
+            self.page.label(),
             FontId::proportional(11.0),
             p.text,
         );
         ui.painter().line_segment(
-            [rect.right_top() + vec2(-128.0, 3.0), rect.right_bottom() + vec2(-128.0, -3.0)],
+            [
+                rect.right_top() + vec2(-103.0, 3.0),
+                rect.right_bottom() + vec2(-103.0, -3.0),
+            ],
             Stroke::new(1.0, p.shadow),
         );
         ui.painter().text(
-            rect.right_center() + vec2(-7.0, 0.0),
+            rect.right_center() + vec2(-23.0, 0.0),
             Align2::RIGHT_CENTER,
-            "7 pages",
+            format!("Page {} of {}", self.page.index() + 1, Page::ALL.len()),
             FontId::proportional(11.0),
             p.text,
         );
+        draw_size_grip(ui.painter(), rect, p);
     }
 
     fn observe(&mut self, label: &str, response: &Response) {
+        if !response.hovered() && !response.has_focus() && !response.is_pointer_button_down_on() {
+            return;
+        }
         let state = if response.is_pointer_button_down_on() {
-            "pressed"
+            "Pressed"
         } else if response.has_focus() {
-            "focused"
+            "Focused"
         } else if response.hovered() {
-            "hovered"
+            "Hovered"
         } else {
-            "idle"
+            "Ready"
         };
-        self.widget_probe = format!("{label}: {state}");
+        self.widget_probe = format!("{label} — {state}");
     }
 
     fn reset_samples(&mut self) {
@@ -673,50 +1072,515 @@ impl FactoryApp {
         self.password = "win95".to_owned();
         self.notes = "Type here to try the recessed multiline editor.".to_owned();
         self.accepted = true;
+        self.enabled_option = false;
+        self.classic_spacing = true;
         self.radio_choice = 0;
         self.combo_choice = "Standard".to_owned();
         self.slider = 68.0;
         self.progress = 42.0;
         self.active_tab = 0;
         self.theme.palette = Palette::default();
+        self.catalog_scroll = 0.0;
+        self.scrollbar_drag_start = None;
         self.last_action = "Sample values reset".to_owned();
     }
 }
 
-fn section(
-    ui: &mut Ui,
-    palette: Palette,
-    title: &str,
-    badge: &str,
-    add_contents: impl FnOnce(&mut Ui),
-) {
-    BevelFrame::raised()
-        .palette(palette)
-        .inner_margin(Margin::same(8))
+fn section(ui: &mut Ui, palette: Palette, title: &str, add_contents: impl FnOnce(&mut Ui)) {
+    let available_width = ui.available_width();
+    let inner = egui::Frame::new()
+        .fill(palette.face)
+        .stroke(Stroke::NONE)
+        .inner_margin(Margin::symmetric(8, 3))
         .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(title).strong());
-                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(RichText::new(badge).small().color(palette.shadow));
-                });
-            });
-            ui.add_space(4.0);
-            horizontal_separator_with_palette(ui, &palette);
-            ui.add_space(6.0);
+            ui.set_min_width((available_width - 16.0).max(1.0));
+            let heading = ui.label(RichText::new(title).strong());
+            ui.add_space(5.0);
             add_contents(ui);
+            heading.rect
         });
-    ui.add_space(8.0);
+    paint_group_box(ui, inner.response.rect, inner.inner, palette);
+    ui.add_space(9.0);
 }
 
-fn feature_chip(ui: &mut Ui, palette: Palette, label: &str) {
+fn paint_group_box(ui: &Ui, rect: Rect, heading: Rect, palette: Palette) {
+    let painter = ui.painter();
+    let top = heading.center().y;
+    let left_gap = (heading.left() - 4.0).max(rect.left() + 8.0);
+    let right_gap = (heading.right() + 4.0).min(rect.right() - 8.0);
+
+    // The heading interrupts the top edge just as it does on a Win95 dialog.
+    for (start, end) in [(rect.left(), left_gap), (right_gap, rect.right())] {
+        painter.line_segment(
+            [pos2(start, top), pos2(end, top)],
+            Stroke::new(1.0, palette.shadow),
+        );
+        painter.line_segment(
+            [pos2(start, top + 1.0), pos2(end, top + 1.0)],
+            Stroke::new(1.0, palette.highlight),
+        );
+    }
+    painter.line_segment(
+        [pos2(rect.left(), top), pos2(rect.left(), rect.bottom())],
+        Stroke::new(1.0, palette.shadow),
+    );
+    painter.line_segment(
+        [
+            pos2(rect.left() + 1.0, top + 1.0),
+            pos2(rect.left() + 1.0, rect.bottom() - 1.0),
+        ],
+        Stroke::new(1.0, palette.highlight),
+    );
+    painter.line_segment(
+        [pos2(rect.right(), top), pos2(rect.right(), rect.bottom())],
+        Stroke::new(1.0, palette.highlight),
+    );
+    painter.line_segment(
+        [
+            pos2(rect.right() - 1.0, top + 1.0),
+            pos2(rect.right() - 1.0, rect.bottom() - 1.0),
+        ],
+        Stroke::new(1.0, palette.shadow),
+    );
+    painter.line_segment(
+        [
+            pos2(rect.left(), rect.bottom()),
+            pos2(rect.right(), rect.bottom()),
+        ],
+        Stroke::new(1.0, palette.highlight),
+    );
+    painter.line_segment(
+        [
+            pos2(rect.left() + 1.0, rect.bottom() - 1.0),
+            pos2(rect.right() - 1.0, rect.bottom() - 1.0),
+        ],
+        Stroke::new(1.0, palette.shadow),
+    );
+}
+
+fn paint_classic_tabs(
+    ui: &Ui,
+    palette: Palette,
+    titles: &[&str],
+    tabs: &[Rect],
+    panel: Rect,
+    selected: usize,
+) {
+    for (index, tab) in tabs.iter().copied().enumerate() {
+        if index == selected {
+            let active = Rect::from_min_max(tab.left_top(), pos2(tab.right(), panel.top() + 2.0));
+            ui.painter()
+                .rect_filled(active, CornerRadius::ZERO, palette.face);
+            paint_bevel(ui.painter(), active, Bevel::Raised, &palette);
+            // Remove the bottom bevel so the selected page joins its panel.
+            ui.painter().rect_filled(
+                Rect::from_min_max(
+                    pos2(active.left() + 1.0, panel.top()),
+                    pos2(active.right() - 1.0, panel.top() + 2.0),
+                ),
+                CornerRadius::ZERO,
+                palette.face,
+            );
+        } else {
+            let inactive =
+                Rect::from_min_max(tab.left_top(), pos2(tab.right(), tab.bottom() - 2.0));
+            ui.painter()
+                .rect_filled(inactive, CornerRadius::ZERO, palette.face);
+            paint_bevel(ui.painter(), inactive, Bevel::Raised, &palette);
+        }
+        ui.painter().text(
+            tab.center() + vec2(0.0, -1.0),
+            Align2::CENTER_CENTER,
+            titles[index],
+            FontId::proportional(13.0),
+            palette.text,
+        );
+    }
+}
+
+fn classic_checkbox(ui: &mut Ui, checked: &mut bool, label: &str, palette: Palette) -> Response {
+    let response = ui.checkbox(checked, label);
+    let size = 13.0;
+    let box_rect = Rect::from_center_size(
+        pos2(response.rect.left() + size * 0.5, response.rect.center().y),
+        vec2(size, size),
+    );
+    ui.painter()
+        .rect_filled(box_rect, CornerRadius::ZERO, palette.input);
+    paint_bevel(ui.painter(), box_rect, Bevel::Sunken, &palette);
+    if *checked {
+        let mark = box_rect.shrink(3.0);
+        ui.painter().add(egui::Shape::line(
+            vec![
+                pos2(mark.left(), mark.center().y),
+                pos2(mark.center().x - 0.5, mark.bottom()),
+                pos2(mark.right(), mark.top()),
+            ],
+            Stroke::new(1.4, palette.text),
+        ));
+    }
+    response
+}
+
+fn classic_menu_toggle(ui: &mut Ui, value: &mut bool, label: &str, palette: Palette) -> Response {
+    let response = menu_row(ui, label, *value, palette);
+    if response.clicked() {
+        *value = !*value;
+        let mut response = response;
+        response.mark_changed();
+        return response;
+    }
+    response
+}
+
+fn classic_menu_choice(ui: &mut Ui, selected: bool, label: &str, palette: Palette) -> Response {
+    menu_row(ui, label, selected, palette)
+}
+
+fn menu_row(ui: &mut Ui, label: &str, checked: bool, palette: Palette) -> Response {
+    let width = ui.available_width().max(190.0);
+    let (rect, response) = ui.allocate_exact_size(vec2(width, 22.0), Sense::click());
+    let highlighted = response.hovered() || response.is_pointer_button_down_on();
+    let text_color = if highlighted {
+        palette.selection_text
+    } else {
+        palette.text
+    };
+    if highlighted {
+        ui.painter()
+            .rect_filled(rect, CornerRadius::ZERO, palette.selection);
+    }
+    if checked {
+        let x = rect.left() + 11.0;
+        let y = rect.center().y;
+        ui.painter().add(egui::Shape::line(
+            vec![
+                pos2(x - 3.0, y),
+                pos2(x - 0.5, y + 3.0),
+                pos2(x + 4.0, y - 3.0),
+            ],
+            Stroke::new(1.5, text_color),
+        ));
+    }
+    ui.painter().text(
+        pos2(rect.left() + 25.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        label,
+        FontId::proportional(13.0),
+        text_color,
+    );
+    response
+}
+
+fn classic_menu_separator(ui: &mut Ui, palette: Palette) {
+    let width = ui.available_width().max(190.0);
+    let (rect, _) = ui.allocate_exact_size(vec2(width, 7.0), Sense::hover());
+    let x1 = rect.left() + 23.0;
+    let x2 = rect.right() - 3.0;
+    ui.painter().line_segment(
+        [pos2(x1, rect.center().y), pos2(x2, rect.center().y)],
+        Stroke::new(1.0, palette.shadow),
+    );
+    ui.painter().line_segment(
+        [
+            pos2(x1, rect.center().y + 1.0),
+            pos2(x2, rect.center().y + 1.0),
+        ],
+        Stroke::new(1.0, palette.highlight),
+    );
+}
+
+fn vertical_separator_with_palette(ui: &mut Ui, palette: &Palette) {
+    let (rect, _) = ui.allocate_exact_size(vec2(4.0, 22.0), Sense::hover());
+    let x = rect.center().x;
+    ui.painter().line_segment(
+        [
+            pos2(x - 1.0, rect.top() + 2.0),
+            pos2(x - 1.0, rect.bottom() - 2.0),
+        ],
+        Stroke::new(1.0, palette.shadow),
+    );
+    ui.painter().line_segment(
+        [
+            pos2(x + 1.0, rect.top() + 2.0),
+            pos2(x + 1.0, rect.bottom() - 2.0),
+        ],
+        Stroke::new(1.0, palette.highlight),
+    );
+}
+
+#[derive(Clone, Copy)]
+enum ToolbarGlyph {
+    Catalog,
+    Reset,
+}
+
+fn toolbar_icon_button(
+    ui: &mut Ui,
+    palette: Palette,
+    label: &str,
+    glyph: ToolbarGlyph,
+) -> Response {
+    let (rect, response) = ui.allocate_exact_size(vec2(26.0, 24.0), Sense::click());
+    ui.painter()
+        .rect_filled(rect, CornerRadius::ZERO, palette.face);
+    paint_bevel(
+        ui.painter(),
+        rect,
+        if response.is_pointer_button_down_on() {
+            Bevel::Pressed
+        } else {
+            Bevel::Raised
+        },
+        &palette,
+    );
+    let icon_rect = Rect::from_center_size(rect.center(), vec2(16.0, 16.0));
+    match glyph {
+        ToolbarGlyph::Catalog => draw_catalog_icon(ui.painter(), icon_rect, palette),
+        ToolbarGlyph::Reset => draw_reset_icon(ui.painter(), icon_rect, palette),
+    }
+    response.on_hover_text(label).on_disabled_hover_text(label)
+}
+
+fn draw_catalog_icon(painter: &egui::Painter, rect: Rect, palette: Palette) {
+    let black = palette.text;
+    let page = Rect::from_min_max(
+        rect.left_top() + vec2(2.0, 1.0),
+        rect.right_bottom() - vec2(1.0, 1.0),
+    );
+    painter.rect_filled(page, CornerRadius::ZERO, palette.input);
+    painter.rect_stroke(
+        page,
+        CornerRadius::ZERO,
+        Stroke::new(1.0, black),
+        StrokeKind::Inside,
+    );
+    painter.rect_filled(
+        Rect::from_min_size(page.left_top(), vec2(page.width(), 3.0)),
+        CornerRadius::ZERO,
+        palette.active_title,
+    );
+    for y in [page.top() + 6.0, page.top() + 9.0, page.top() + 12.0] {
+        painter.line_segment(
+            [pos2(page.left() + 3.0, y), pos2(page.right() - 3.0, y)],
+            Stroke::new(1.0, palette.shadow),
+        );
+    }
+}
+
+fn draw_reset_icon(painter: &egui::Painter, rect: Rect, palette: Palette) {
+    let center = rect.center();
+    let points = [
+        pos2(center.x + 2.0, center.y - 5.0),
+        pos2(center.x - 2.0, center.y - 5.0),
+        pos2(center.x - 5.0, center.y - 2.0),
+        pos2(center.x - 5.0, center.y + 2.0),
+        pos2(center.x - 2.0, center.y + 5.0),
+        pos2(center.x + 2.0, center.y + 5.0),
+        pos2(center.x + 5.0, center.y + 2.0),
+    ];
+    painter.add(egui::Shape::line(
+        points.to_vec(),
+        Stroke::new(1.0, palette.text),
+    ));
+    painter.add(egui::Shape::convex_polygon(
+        vec![
+            pos2(center.x + 6.0, center.y - 6.0),
+            pos2(center.x + 6.0, center.y - 1.0),
+            pos2(center.x + 1.0, center.y - 3.5),
+        ],
+        palette.text,
+        Stroke::NONE,
+    ));
+}
+
+fn draw_combo_arrow(ui: &Ui, rect: Rect, palette: Palette, pressed: bool) {
+    ui.painter()
+        .rect_filled(rect, CornerRadius::ZERO, palette.face);
+    paint_bevel(
+        ui.painter(),
+        rect.shrink(1.0),
+        if pressed {
+            Bevel::Pressed
+        } else {
+            Bevel::Raised
+        },
+        &palette,
+    );
+    let center = rect.center()
+        + if pressed {
+            vec2(1.0, 1.0)
+        } else {
+            vec2(0.0, 0.0)
+        };
+    ui.painter().add(egui::Shape::convex_polygon(
+        vec![
+            pos2(center.x - 4.0, center.y - 2.0),
+            pos2(center.x + 4.0, center.y - 2.0),
+            pos2(center.x, center.y + 2.0),
+        ],
+        palette.text,
+        Stroke::NONE,
+    ));
+}
+
+#[derive(Clone, Copy)]
+enum LegendStyle {
+    Raised,
+    Sunken,
+    Selected,
+}
+
+fn edge_legend(ui: &mut Ui, palette: Palette, label: &str, style: LegendStyle) {
+    ui.horizontal(|ui| {
+        let (rect, _) = ui.allocate_exact_size(vec2(30.0, 15.0), Sense::hover());
+        match style {
+            LegendStyle::Raised => {
+                ui.painter()
+                    .rect_filled(rect, CornerRadius::ZERO, palette.face);
+                paint_bevel(ui.painter(), rect, Bevel::Raised, &palette);
+            }
+            LegendStyle::Sunken => {
+                ui.painter()
+                    .rect_filled(rect, CornerRadius::ZERO, palette.input);
+                paint_bevel(ui.painter(), rect, Bevel::Sunken, &palette);
+            }
+            LegendStyle::Selected => {
+                ui.painter()
+                    .rect_filled(rect, CornerRadius::ZERO, palette.selection);
+                ui.painter().text(
+                    rect.center(),
+                    Align2::CENTER_CENTER,
+                    "Ab",
+                    FontId::proportional(9.0),
+                    palette.selection_text,
+                );
+            }
+        }
+        ui.label(label);
+    });
+}
+
+fn classic_text_edit(
+    ui: &mut Ui,
+    size: egui::Vec2,
+    edit: egui::TextEdit<'_>,
+    palette: Palette,
+) -> Response {
     BevelFrame::sunken()
         .palette(palette)
         .fill(palette.input)
-        .inner_margin(Margin::same(4))
+        .inner_margin(Margin::same(2))
         .show(ui, |ui| {
-            ui.label(RichText::new(label).small());
-        });
+            ui.add_sized(
+                [(size.x - 4.0).max(1.0), (size.y - 4.0).max(1.0)],
+                edit.frame(egui::Frame::NONE).margin(Margin::same(2)),
+            )
+        })
+        .inner
+}
+
+fn segmented_progress_bar(ui: &mut Ui, palette: Palette, width: f32, height: f32, value: f32) {
+    let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+    ui.painter()
+        .rect_filled(rect, CornerRadius::ZERO, palette.face);
+    paint_bevel(ui.painter(), rect, Bevel::Sunken, &palette);
+    let inner = rect.shrink(3.0);
+    let segment_width = 8.0;
+    let gap = 2.0;
+    let count = ((inner.width() + gap) / (segment_width + gap)).floor() as usize;
+    let filled = ((value.clamp(0.0, 100.0) / 100.0) * count as f32).round() as usize;
+    for index in 0..filled.min(count) {
+        let x = inner.left() + index as f32 * (segment_width + gap);
+        ui.painter().rect_filled(
+            Rect::from_min_size(
+                pos2(x, inner.top()),
+                vec2(segment_width.min(inner.right() - x), inner.height()),
+            ),
+            CornerRadius::ZERO,
+            palette.selection,
+        );
+    }
+}
+
+fn draw_classic_slider(ui: &Ui, palette: Palette, rect: Rect, value: f32, pressed: bool) {
+    let half_handle = (rect.height() / 2.5) * 0.55;
+    let left = rect.left() + half_handle;
+    let right = rect.right() - half_handle;
+    let center_x = egui::lerp(left..=right, (value / 100.0).clamp(0.0, 1.0));
+    let center_y = rect.center().y;
+    let rail = Rect::from_min_max(pos2(left, center_y - 2.5), pos2(right, center_y + 2.5));
+    ui.painter()
+        .rect_filled(rail, CornerRadius::ZERO, palette.face);
+    paint_bevel(ui.painter(), rail, Bevel::Sunken, &palette);
+
+    let thumb = Rect::from_center_size(pos2(center_x, center_y), vec2(12.0, rect.height() - 2.0));
+    ui.painter()
+        .rect_filled(thumb, CornerRadius::ZERO, palette.face);
+    paint_bevel(
+        ui.painter(),
+        thumb,
+        if pressed {
+            Bevel::Pressed
+        } else {
+            Bevel::Raised
+        },
+        &palette,
+    );
+    ui.painter().line_segment(
+        [
+            pos2(center_x, thumb.top() + 4.0),
+            pos2(center_x, thumb.bottom() - 4.0),
+        ],
+        Stroke::new(1.0, palette.shadow),
+    );
+}
+
+fn scroll_arrow_button(
+    ui: &mut Ui,
+    rect: Rect,
+    id: &'static str,
+    palette: Palette,
+    down: bool,
+) -> Response {
+    let response = ui.interact(rect, Id::unique(id), Sense::click());
+    ui.painter()
+        .rect_filled(rect, CornerRadius::ZERO, palette.face);
+    paint_bevel(
+        ui.painter(),
+        rect,
+        if response.is_pointer_button_down_on() {
+            Bevel::Pressed
+        } else {
+            Bevel::Raised
+        },
+        &palette,
+    );
+    let center = rect.center()
+        + if response.is_pointer_button_down_on() {
+            vec2(1.0, 1.0)
+        } else {
+            vec2(0.0, 0.0)
+        };
+    let points = if down {
+        vec![
+            pos2(center.x - 4.0, center.y - 2.0),
+            pos2(center.x + 4.0, center.y - 2.0),
+            pos2(center.x, center.y + 2.0),
+        ]
+    } else {
+        vec![
+            pos2(center.x - 4.0, center.y + 2.0),
+            pos2(center.x + 4.0, center.y + 2.0),
+            pos2(center.x, center.y - 2.0),
+        ]
+    };
+    ui.painter().add(egui::Shape::convex_polygon(
+        points,
+        palette.text,
+        Stroke::NONE,
+    ));
+    response
 }
 
 fn palette_editor(ui: &mut Ui, label: &str, color: &mut Color32) {
@@ -741,6 +1605,7 @@ fn swatch(ui: &mut Ui, label: &str, color: Color32, palette: &Palette) {
 enum CaptionGlyph {
     Minimize,
     Maximize,
+    Restore,
     Close,
 }
 
@@ -751,7 +1616,7 @@ fn caption_button(
     glyph: CaptionGlyph,
     palette: Palette,
 ) -> Response {
-    let response = ui.interact(rect, Id::new(id), Sense::click());
+    let response = ui.interact(rect, Id::unique(id), Sense::click());
     ui.painter()
         .rect_filled(rect, CornerRadius::ZERO, palette.face);
     paint_bevel(
@@ -765,7 +1630,7 @@ fn caption_button(
         &palette,
     );
 
-    let stroke = Stroke::new(1.4, palette.text);
+    let stroke = Stroke::new(1.0, palette.text);
     match glyph {
         CaptionGlyph::Minimize => {
             ui.painter().line_segment(
@@ -784,13 +1649,34 @@ fn caption_button(
                 StrokeKind::Inside,
             );
         }
+        CaptionGlyph::Restore => {
+            let back = Rect::from_min_max(
+                rect.left_top() + vec2(6.0, 3.0),
+                rect.right_bottom() - vec2(3.0, 6.0),
+            );
+            let front = back.translate(vec2(-3.0, 3.0));
+            ui.painter()
+                .rect_filled(front, CornerRadius::ZERO, palette.face);
+            ui.painter()
+                .rect_stroke(back, CornerRadius::ZERO, stroke, StrokeKind::Inside);
+            ui.painter()
+                .rect_stroke(front, CornerRadius::ZERO, stroke, StrokeKind::Inside);
+            ui.painter()
+                .line_segment([back.left_top(), pos2(back.right(), back.top())], stroke);
+        }
         CaptionGlyph::Close => {
             ui.painter().line_segment(
-                [rect.left_top() + vec2(5.0, 4.0), rect.right_bottom() + vec2(-5.0, -4.0)],
+                [
+                    rect.left_top() + vec2(5.0, 4.0),
+                    rect.right_bottom() + vec2(-5.0, -4.0),
+                ],
                 stroke,
             );
             ui.painter().line_segment(
-                [rect.right_top() + vec2(-5.0, 4.0), rect.left_bottom() + vec2(5.0, -4.0)],
+                [
+                    rect.right_top() + vec2(-5.0, 4.0),
+                    rect.left_bottom() + vec2(5.0, -4.0),
+                ],
                 stroke,
             );
         }
@@ -798,18 +1684,67 @@ fn caption_button(
     response
 }
 
-fn draw_app_icon(painter: &egui::Painter, top_left: egui::Pos2) {
-    let size = 6.0;
-    for (offset, color) in [
-        (vec2(0.0, 0.0), Color32::from_rgb(0xFF, 0x40, 0x40)),
-        (vec2(7.0, 0.0), Color32::from_rgb(0x40, 0xC0, 0x40)),
-        (vec2(0.0, 7.0), Color32::from_rgb(0x40, 0x60, 0xFF)),
-        (vec2(7.0, 7.0), Color32::from_rgb(0xFF, 0xD0, 0x20)),
+fn draw_app_icon(painter: &egui::Painter, rect: Rect) {
+    painter.rect_filled(
+        rect,
+        CornerRadius::ZERO,
+        Color32::from_rgb(0x00, 0x00, 0x00),
+    );
+    let window = rect.shrink(1.0);
+    painter.rect_filled(
+        window,
+        CornerRadius::ZERO,
+        Color32::from_rgb(0xC0, 0xC0, 0xC0),
+    );
+    painter.rect_filled(
+        Rect::from_min_max(window.left_top(), pos2(window.right(), window.top() + 3.0)),
+        CornerRadius::ZERO,
+        Color32::from_rgb(0x00, 0x00, 0x80),
+    );
+    painter.rect_filled(
+        Rect::from_min_size(
+            pos2(window.left() + 2.0, window.top() + 5.0),
+            vec2(4.0, 4.0),
+        ),
+        CornerRadius::ZERO,
+        Color32::from_rgb(0x00, 0x80, 0x80),
+    );
+    painter.rect_filled(
+        Rect::from_min_size(
+            pos2(window.left() + 8.0, window.top() + 5.0),
+            vec2(4.0, 4.0),
+        ),
+        CornerRadius::ZERO,
+        Color32::from_rgb(0x00, 0x00, 0x80),
+    );
+    painter.rect_filled(
+        Rect::from_min_size(
+            pos2(window.left() + 2.0, window.top() + 10.0),
+            vec2(10.0, 2.0),
+        ),
+        CornerRadius::ZERO,
+        Color32::from_rgb(0x80, 0x80, 0x80),
+    );
+}
+
+fn draw_size_grip(painter: &egui::Painter, rect: Rect, palette: Palette) {
+    let start = rect.right_bottom() - vec2(13.0, 3.0);
+    for (x_offset, y_offset) in [
+        (8.0, 0.0),
+        (5.0, 3.0),
+        (2.0, 6.0),
+        (11.0, 3.0),
+        (8.0, 6.0),
+        (5.0, 9.0),
     ] {
-        painter.rect_filled(
-            Rect::from_min_size(top_left + offset, vec2(size, size)),
-            CornerRadius::ZERO,
-            color,
+        let point = start + vec2(x_offset, y_offset);
+        painter.line_segment(
+            [point, point + vec2(2.0, 0.0)],
+            Stroke::new(1.0, palette.shadow),
+        );
+        painter.line_segment(
+            [point + vec2(0.0, 1.0), point + vec2(2.0, 1.0)],
+            Stroke::new(1.0, palette.highlight),
         );
     }
 }

@@ -1,6 +1,7 @@
 use egui::style::HandleShape;
 use egui::{
-    Color32, Context, CornerRadius, FontId, Id, Margin, Stroke, Style, TextStyle, Theme, vec2,
+    Color32, Context, CornerRadius, FontId, Id, Margin, Shadow, Stroke, Style, TextStyle, Theme,
+    vec2,
 };
 
 use crate::Palette;
@@ -25,13 +26,23 @@ impl Classic95 {
         let visuals = &mut style.visuals;
 
         visuals.dark_mode = false;
-        visuals.override_text_color = Some(p.text);
+        // Leave text color to each widget's visuals so selected widgets can use
+        // the palette's white-on-navy selection color.
+        visuals.override_text_color = None;
         visuals.hyperlink_color = p.accent;
         visuals.faint_bg_color = p.light;
         visuals.extreme_bg_color = p.input;
         visuals.text_edit_bg_color = Some(p.input);
         visuals.window_fill = p.face;
-        visuals.window_stroke = Stroke::new(1.0, p.dark_shadow);
+        // Popup surfaces use the white edge as their raised top/left bevel;
+        // the sharp offset shadow supplies the lower/right edge.
+        visuals.window_stroke = Stroke::new(1.0, p.highlight);
+        visuals.popup_shadow = Shadow {
+            offset: [2, 2],
+            blur: 0,
+            spread: 0,
+            color: p.shadow,
+        };
         visuals.window_corner_radius = CornerRadius::ZERO;
         visuals.menu_corner_radius = CornerRadius::ZERO;
         visuals.panel_fill = p.face;
@@ -42,19 +53,28 @@ impl Classic95 {
         visuals.striped = false;
         visuals.handle_shape = HandleShape::Rect { aspect_ratio: 0.7 };
 
-        set_widget(&mut visuals.widgets.noninteractive, p.face, p.shadow, p.text);
-        set_widget(&mut visuals.widgets.inactive, p.face, p.dark_shadow, p.text);
-        set_widget(&mut visuals.widgets.hovered, p.face, p.text, p.text);
+        set_widget(
+            &mut visuals.widgets.noninteractive,
+            p.face,
+            p.shadow,
+            p.text,
+        );
+        set_widget(&mut visuals.widgets.inactive, p.face, p.shadow, p.text);
+        set_widget(&mut visuals.widgets.hovered, p.face, p.dark_shadow, p.text);
         set_widget(&mut visuals.widgets.active, p.face, p.dark_shadow, p.text);
         set_widget(&mut visuals.widgets.open, p.face, p.dark_shadow, p.text);
 
         style.spacing.item_spacing = vec2(8.0, 6.0);
-        style.spacing.button_padding = vec2(8.0, 3.0);
+        style.spacing.button_padding = vec2(6.0, 3.0);
         style.spacing.window_margin = Margin::same(8);
         style.spacing.menu_margin = Margin::same(2);
         style.spacing.interact_size = vec2(20.0, 22.0);
-        style.spacing.slider_width = 140.0;
-        style.spacing.scroll = egui::style::ScrollStyle::solid();
+        style.spacing.slider_width = 150.0;
+        let mut scroll = egui::style::ScrollStyle::solid();
+        scroll.bar_width = 14.0;
+        scroll.handle_min_length = 24.0;
+        scroll.bar_inner_margin = 1.0;
+        style.spacing.scroll = scroll;
         style.animation_time = 0.0;
         style
             .text_styles
@@ -83,7 +103,7 @@ impl Classic95 {
     pub fn install(&self, ctx: &Context) {
         let style = self.style();
         ctx.data_mut(|data| {
-            data.insert_temp(Id::new("egui-classic95-palette"), self.palette);
+            data.insert_temp(Id::unique("egui-classic95-palette"), self.palette);
         });
         ctx.set_style_of(Theme::Light, style.clone());
         ctx.set_theme(Theme::Light);
@@ -93,7 +113,7 @@ impl Classic95 {
 
 pub(crate) fn palette_for(ctx: &Context) -> Palette {
     ctx.data(|data| {
-        data.get_temp::<Palette>(Id::new("egui-classic95-palette"))
+        data.get_temp::<Palette>(Id::unique("egui-classic95-palette"))
             .unwrap_or_default()
     })
 }
