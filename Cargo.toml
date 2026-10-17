@@ -1,0 +1,20 @@
+[package]
+name = "egui-classic95"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "A reusable Windows 95-inspired theme and widget toolkit for egui"
+license = "MIT"
+readme = "README.md"
+keywords = ["egui", "theme", "windows95", "gui"]
+categories = ["gui"]
+
+[dependencies]
+egui = "0.37"
+
+[dev-dependencies]
+eframe = "0.37"
+
+[[example]]
+name = "widget_factory"
+path = "examples/widget_factory.rs"
