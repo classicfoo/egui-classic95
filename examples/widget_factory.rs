@@ -564,16 +564,6 @@ impl FactoryApp {
             },
             &p,
         );
-        for offset in [-2.0, 0.0, 2.0] {
-            let y = thumb_rect.center().y + offset;
-            ui.painter().line_segment(
-                [
-                    pos2(thumb_rect.left() + 5.0, y),
-                    pos2(thumb_rect.right() - 5.0, y),
-                ],
-                Stroke::new(1.0, if offset < 0.0 { p.highlight } else { p.shadow }),
-            );
-        }
     }
 
     fn resize_handles(&self, ui: &mut Ui, rect: Rect) {
@@ -1557,13 +1547,6 @@ fn draw_classic_slider(ui: &Ui, palette: Palette, rect: Rect, value: f32, presse
             Bevel::Raised
         },
         &palette,
-    );
-    ui.painter().line_segment(
-        [
-            pos2(center_x, thumb.top() + 4.0),
-            pos2(center_x, thumb.bottom() - 4.0),
-        ],
-        Stroke::new(1.0, palette.shadow),
     );
 }
 
