@@ -140,23 +140,12 @@ impl eframe::App for FactoryApp {
         ui.painter()
             .rect_filled(full_rect, CornerRadius::ZERO, self.theme.palette.face);
 
-        let window_rect = full_rect.shrink(1.0);
-        ui.painter()
-            .rect_filled(window_rect, CornerRadius::ZERO, self.theme.palette.face);
-        paint_bevel(
-            ui.painter(),
-            window_rect,
-            Bevel::Window,
-            &self.theme.palette,
-        );
-
-        let content_rect = window_rect.shrink(3.0);
-        ui.scope_builder(UiBuilder::new().max_rect(content_rect), |ui| {
-            ui.set_min_size(content_rect.size());
+        ui.scope_builder(UiBuilder::new().max_rect(full_rect), |ui| {
+            ui.set_min_size(full_rect.size());
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            self.draw_window(ui, content_rect.width());
+            self.draw_window(ui, full_rect.width());
         });
-        self.resize_handles(ui, window_rect);
+        self.resize_handles(ui, full_rect);
     }
 }
 
