@@ -140,7 +140,7 @@ impl eframe::App for FactoryApp {
         ui.painter()
             .rect_filled(full_rect, CornerRadius::ZERO, self.theme.palette.face);
 
-        paint_bevel(ui.painter(), full_rect, Bevel::Window, &self.theme.palette);
+        paint_bevel(ui.painter(), full_rect, Bevel::Raised, &self.theme.palette);
 
         let content_rect = full_rect.shrink(2.0);
         ui.scope_builder(UiBuilder::new().max_rect(content_rect), |ui| {
