@@ -208,10 +208,13 @@ pub fn horizontal_separator(ui: &mut Ui) -> Response {
 /// Draw a two-tone etched rule using a custom palette.
 pub fn horizontal_separator_with_palette(ui: &mut Ui, palette: &Palette) -> Response {
     // Child UIs can report a minimum width larger than their visible column.
-    // Keep separators inside both the active layout and its clipping region.
+    // Restrict the rule to the visible parent area, with a one-point inset so
+    // its final pixel does not touch an enclosing bevel.
     let available = ui.available_rect_before_wrap();
-    let right = available.right().min(ui.clip_rect().right() - 1.0);
-    let width = (right - available.left()).max(1.0);
+    let bounds = available.intersect(ui.clip_rect());
+    let left = bounds.left();
+    let right = bounds.right() - 1.0;
+    let width = (right - left).max(1.0);
     let (rect, response) = ui.allocate_exact_size(vec2(width, 2.0), Sense::hover());
     let painter = ui.painter();
     painter.line_segment(

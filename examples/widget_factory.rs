@@ -142,8 +142,16 @@ impl eframe::App for FactoryApp {
 
         paint_bevel(ui.painter(), full_rect, Bevel::Raised, &self.theme.palette);
 
-        let content_rect = full_rect.shrink(2.0);
+        // Leave an extra client-area point inside the two-layer window bevel,
+        // so the status-bar frame and full-width rules cannot visually merge
+        // with the outer edge.
+        let content_rect = full_rect.shrink(3.0);
         ui.scope_builder(UiBuilder::new().max_rect(content_rect), |ui| {
+            // Keep every child painter inside the inner window edge. Child UIs
+            // can grow their layout rect when content is wider than expected,
+            // but that must not let separators or the status bar paint over the
+            // raised window bevel.
+            ui.shrink_clip_rect(content_rect);
             ui.set_min_size(content_rect.size());
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             self.draw_window(ui, content_rect.width());
@@ -163,7 +171,7 @@ impl FactoryApp {
                 self.toolbar(ui, p);
             }
 
-            let status_height = if self.show_status_bar { 26.0 } else { 0.0 };
+            let status_height = if self.show_status_bar { 30.0 } else { 0.0 };
             let main_height = (ui.available_height() - status_height).max(250.0);
             let nav_width = 176.0;
             let inspector_width = 220.0;
@@ -1032,7 +1040,10 @@ impl FactoryApp {
     }
 
     fn status_bar(&self, ui: &mut Ui, p: Palette) {
-        let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 21.0), Sense::hover());
+        // Reserve a small client-area gutter so the status bevel reads as its
+        // own control instead of touching the window's raised outer frame.
+        let (bounds, _) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
+        let rect = bounds.shrink(2.0);
         ui.painter().rect_filled(rect, CornerRadius::ZERO, p.face);
         paint_bevel(ui.painter(), rect, Bevel::Sunken, &p);
         ui.painter().text(
