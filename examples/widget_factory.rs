@@ -246,29 +246,34 @@ impl FactoryApp {
 
         let icon_response =
             ui.interact(icon_rect, Id::unique("factory-system-menu"), Sense::click());
-        egui::Popup::menu(&icon_response).show(|ui| {
-            let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
-            if ui
-                .add_enabled(maximized, egui::Button::new("Restore"))
-                .clicked()
-            {
-                ui.ctx()
-                    .send_viewport_cmd(ViewportCommand::Maximized(false));
-            }
-            if ui.button("Minimize").clicked() {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
-            }
-            if ui
-                .add_enabled(!maximized, egui::Button::new("Maximize"))
-                .clicked()
-            {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
-            }
-            ui.separator();
-            if ui.button("Close").clicked() {
-                ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-            }
-        });
+        egui::Popup::menu(&icon_response)
+            .style(|style: &mut egui::Style| {
+                style.visuals.popup_shadow = egui::Shadow::NONE;
+            })
+            .show(|ui| {
+                let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
+                if ui
+                    .add_enabled(maximized, egui::Button::new("Restore"))
+                    .clicked()
+                {
+                    ui.ctx()
+                        .send_viewport_cmd(ViewportCommand::Maximized(false));
+                }
+                if ui.button("Minimize").clicked() {
+                    ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
+                }
+                if ui
+                    .add_enabled(!maximized, egui::Button::new("Maximize"))
+                    .clicked()
+                {
+                    ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
+                }
+                ui.separator();
+                if ui.button("Close").clicked() {
+                    ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+                }
+                paint_popup_bevel(ui, p);
+            });
 
         let y = rect.center().y - 9.0;
         let min_rect = Rect::from_min_size(pos2(controls_left, y), vec2(18.0, 18.0));
@@ -297,6 +302,7 @@ impl FactoryApp {
         let p = self.theme.palette;
         let menu_style = move |style: &mut egui::Style| {
             egui::menu::menu_style(style);
+            style.visuals.popup_shadow = egui::Shadow::NONE;
             for visuals in [
                 &mut style.visuals.widgets.hovered,
                 &mut style.visuals.widgets.active,
@@ -331,6 +337,7 @@ impl FactoryApp {
                                 self.last_action = format!("Opened {}", page.label());
                             }
                         }
+                        paint_popup_bevel(ui, p);
                     });
                     ui.menu_button("Options", |ui| {
                         ui.set_width(190.0);
@@ -338,11 +345,13 @@ impl FactoryApp {
                         classic_menu_toggle(ui, &mut self.show_toolbar, "Show toolbar", p);
                         classic_menu_toggle(ui, &mut self.show_status_bar, "Show status bar", p);
                         classic_menu_toggle(ui, &mut self.show_inspector, "Show details pane", p);
+                        paint_popup_bevel(ui, p);
                     });
                     classic_menu_separator(ui, p);
                     if ui.button("Exit").clicked() {
                         ui.ctx().send_viewport_cmd(ViewportCommand::Close);
                     }
+                    paint_popup_bevel(ui, p);
                 });
                 ui.menu_button("Edit", |ui| {
                     ui.set_width(190.0);
@@ -355,6 +364,7 @@ impl FactoryApp {
                         ui.ctx().copy_text(self.name.clone());
                         self.last_action = "Name copied to the clipboard".to_owned();
                     }
+                    paint_popup_bevel(ui, p);
                 });
                 ui.menu_button("View", |ui| {
                     ui.set_width(190.0);
@@ -370,12 +380,14 @@ impl FactoryApp {
                     classic_menu_toggle(ui, &mut self.show_toolbar, "Toolbar", p);
                     classic_menu_toggle(ui, &mut self.show_status_bar, "Status bar", p);
                     classic_menu_toggle(ui, &mut self.show_inspector, "Details pane", p);
+                    paint_popup_bevel(ui, p);
                 });
                 ui.menu_button("Help", |ui| {
                     ui.set_width(190.0);
                     ui.spacing_mut().item_spacing.y = 0.0;
                     ui.label("Widget Factory");
                     ui.label("A control gallery for egui-classic95.");
+                    paint_popup_bevel(ui, p);
                 });
             });
         horizontal_separator_with_palette(ui, &self.theme.palette);
@@ -808,6 +820,9 @@ impl FactoryApp {
                             .icon(move |ui, rect, _visuals, is_open| {
                                 draw_combo_arrow(ui, rect, p, is_open);
                             })
+                            .popup_style(egui::style::StyleModifier::new(|style| {
+                                style.visuals.popup_shadow = egui::Shadow::NONE;
+                            }))
                             .show_ui(ui, |ui| {
                                 for option in ["Standard", "Large icons", "Details", "List"] {
                                     let choice = ui.selectable_value(
@@ -817,6 +832,7 @@ impl FactoryApp {
                                     );
                                     selection_changed |= choice.changed();
                                 }
+                                paint_popup_bevel(ui, p);
                             })
                     })
                     .inner;
@@ -1235,6 +1251,18 @@ fn classic_menu_toggle(ui: &mut Ui, value: &mut bool, label: &str, palette: Pale
 
 fn classic_menu_choice(ui: &mut Ui, selected: bool, label: &str, palette: Palette) -> Response {
     menu_row(ui, label, selected, palette)
+}
+
+fn paint_popup_bevel(ui: &Ui, palette: Palette) {
+    let margin = ui.spacing().menu_margin;
+    let stroke = ui.visuals().window_stroke.width;
+    let outer_margin = vec2(
+        margin.leftf().max(margin.rightf()) + stroke,
+        margin.topf().max(margin.bottomf()) + stroke,
+    );
+    let rect = ui.min_rect().expand2(outer_margin);
+    let painter = ui.ctx().layer_painter(ui.layer_id());
+    paint_bevel(&painter, rect, Bevel::Raised, &palette);
 }
 
 fn menu_row(ui: &mut Ui, label: &str, checked: bool, palette: Palette) -> Response {
