@@ -219,14 +219,14 @@ pub fn horizontal_separator_with_palette(ui: &mut Ui, palette: &Palette) -> Resp
             pos2(rect.left(), rect.top() + 0.5),
             pos2(rect.right() - 0.5, rect.top() + 0.5),
         ],
-        Stroke::new(1.0, palette.highlight),
+        Stroke::new(1.0, palette.shadow),
     );
     painter.line_segment(
         [
             pos2(rect.left(), rect.bottom() - 0.5),
             pos2(rect.right() - 0.5, rect.bottom() - 0.5),
         ],
-        Stroke::new(1.0, palette.shadow),
+        Stroke::new(1.0, palette.highlight),
     );
     response
 }
