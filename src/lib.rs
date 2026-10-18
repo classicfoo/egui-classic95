@@ -28,6 +28,7 @@ mod menu;
 mod palette;
 mod theme;
 mod toolbar;
+mod tooltip;
 mod treeview;
 mod widgets;
 
@@ -50,6 +51,7 @@ pub use menu::{
 pub use palette::Palette;
 pub use theme::Classic95;
 pub use toolbar::ClassicToolbar;
+pub use tooltip::ClassicTooltip;
 pub use treeview::{ClassicTreeNode, ClassicTreeView, ClassicTreeViewResponse};
 pub use widgets::{
     BevelFrame, ClassicButton, horizontal_separator, horizontal_separator_with_palette,

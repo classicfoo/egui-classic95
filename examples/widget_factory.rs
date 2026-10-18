@@ -12,8 +12,8 @@ use egui_classic95::{
     ClassicGroupBox, ClassicListBox, ClassicListView, ClassicListViewColumn, ClassicMenuBar,
     ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator, ClassicProgressBar,
     ClassicRadioButton, ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicSystemMenu,
-    ClassicTabs, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton, ClassicTreeNode,
-    ClassicTreeView, ClassicWindowFrame, Palette, classic_popup_style,
+    ClassicTabs, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton, ClassicTooltip,
+    ClassicTreeNode, ClassicTreeView, ClassicWindowFrame, Palette, classic_popup_style,
     horizontal_separator_with_palette, paint_bevel, vertical_separator_with_palette,
 };
 use std::{cell::Cell, rc::Rc};
@@ -49,11 +49,12 @@ enum Page {
     Ranges,
     Containers,
     Lists,
+    Tooltips,
     Palette,
 }
 
 impl Page {
-    const ALL: [Self; 8] = [
+    const ALL: [Self; 9] = [
         Self::Overview,
         Self::Buttons,
         Self::TextFields,
@@ -61,6 +62,7 @@ impl Page {
         Self::Ranges,
         Self::Containers,
         Self::Lists,
+        Self::Tooltips,
         Self::Palette,
     ];
 
@@ -73,6 +75,7 @@ impl Page {
             Self::Ranges => "Ranges & feedback",
             Self::Containers => "Containers",
             Self::Lists => "Lists & toolbar",
+            Self::Tooltips => "Tooltips",
             Self::Palette => "Palette",
         }
     }
@@ -567,6 +570,7 @@ impl FactoryApp {
                 self.show_ranges(ui, p);
                 self.show_containers(ui, p);
                 self.show_lists(ui, p);
+                self.show_tooltips(ui, p);
                 self.show_palette(ui, p);
             }
             Page::Buttons => self.show_buttons(ui, p),
@@ -575,6 +579,7 @@ impl FactoryApp {
             Page::Ranges => self.show_ranges(ui, p),
             Page::Containers => self.show_containers(ui, p),
             Page::Lists => self.show_lists(ui, p),
+            Page::Tooltips => self.show_tooltips(ui, p),
             Page::Palette => self.show_palette(ui, p),
         }
     }
@@ -1044,6 +1049,27 @@ impl FactoryApp {
             if let Some(response) = tree.rows.iter().find(|response| response.has_focus()) {
                 self.observe("Tree row", response);
             }
+        });
+    }
+
+    fn show_tooltips(&mut self, ui: &mut Ui, p: Palette) {
+        section(ui, p, "Tooltips", |ui| {
+            ui.label("Pause over a control to see a short description.");
+            ui.add_space(5.0);
+            let response = ui.button("Hover for a tooltip");
+            let response = ClassicTooltip::new("A brief description of this command.")
+                .palette(p)
+                .show_for(response);
+            self.observe("Tooltip button", &response);
+
+            ui.add_space(5.0);
+            let response = ui.add_enabled(false, egui::Button::new("Unavailable command"));
+            let response = ClassicTooltip::new("This command is unavailable in the current view.")
+                .palette(p)
+                .show_for(response);
+            self.observe("Disabled tooltip", &response);
+
+            ui.label("Tooltips follow the pointer and stay within the window bounds.");
         });
     }
 

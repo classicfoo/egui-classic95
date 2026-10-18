@@ -4,7 +4,7 @@ use egui::{
 };
 
 use crate::theme::palette_for;
-use crate::{Bevel, Palette, paint_bevel};
+use crate::{Bevel, ClassicTooltip, Palette, paint_bevel};
 
 /// A classic menu bar that applies Win95 menu and popup colors to egui menus.
 #[derive(Clone, Copy, Debug, Default)]
@@ -328,12 +328,11 @@ impl ClassicToolbarButton {
     /// Show the button and let the application paint its own icon.
     pub fn show(self, ui: &mut Ui, draw_icon: impl FnOnce(&Painter, Rect)) -> Response {
         let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
-        let sense = if self.enabled {
-            Sense::click()
-        } else {
-            Sense::hover()
-        };
-        let (rect, response) = ui.allocate_exact_size(self.size, sense);
+        let (rect, response) = ui
+            .add_enabled_ui(self.enabled, |ui| {
+                ui.allocate_exact_size(self.size, Sense::click())
+            })
+            .inner;
         ui.painter()
             .rect_filled(rect, CornerRadius::ZERO, palette.face);
         if response.is_pointer_button_down_on() || self.selected {
@@ -348,11 +347,12 @@ impl ClassicToolbarButton {
         };
         let icon_rect = Rect::from_center_size(rect.center(), vec2(icon_size, icon_size));
         draw_icon(ui.painter(), icon_rect);
-        if self.enabled {
-            response.on_hover_text(self.label)
-        } else {
-            response.on_disabled_hover_text(self.label)
-        }
+        let enabled = response.enabled();
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, &self.label));
+        ClassicTooltip::new(self.label)
+            .palette(palette)
+            .show_for(response)
     }
 }
 

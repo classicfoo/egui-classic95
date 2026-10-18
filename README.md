@@ -2,7 +2,7 @@
 
 A small reusable theme engine for building Windows 95-inspired interfaces with [egui](https://github.com/emilk/egui). Its default system palette uses silver control faces, navy active captions, teal desktop color, and square corners. Raised and recessed edges are painted from the classic light-and-shadow bevel convention.
 
-The **Widget Factory** is the project centerpiece: a runnable control gallery with editable fields, live buttons, selection controls, report and tree views, a reusable toolbar, sliders, progress, containers, palette editing, and an interaction inspector.
+The **Widget Factory** is the project centerpiece: a runnable control gallery with editable fields, live buttons, selection controls, report and tree views, a reusable toolbar, tooltips, sliders, progress, containers, palette editing, and an interaction inspector.
 
 On native platforms, `Classic95::install` uses the system's generic sans-serif font for proportional text, so the app follows the host's font configuration without bundling a font. Font discovery runs in the background; egui's built-in fonts remain available as fallbacks. On WebAssembly, it keeps egui's built-in fonts.
 
@@ -29,7 +29,7 @@ use egui_classic95::{
     BevelFrame, Classic95, ClassicButton, ClassicListBox, ClassicListView,
     ClassicListViewColumn, ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup,
     ClassicSystemMenu, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton,
-    ClassicTreeNode, ClassicTreeView, ClassicWindowFrame,
+    ClassicTooltip, ClassicTreeNode, ClassicTreeView, ClassicWindowFrame,
 };
 
 fn setup(ctx: &egui::Context) {
@@ -121,6 +121,14 @@ ClassicToolbar::new().show(ui, |ui| {
 });
 ```
 
+Attach a themed tooltip to any egui response. It keeps egui's hover delay, follows the pointer, and adds an accessible description:
+
+```rust
+let response = ui.button("Help");
+let response = ClassicTooltip::new("Explains what this command does.")
+    .show_for(response);
+```
+
 The title, icon, menu labels, menu actions, and page contents remain application-owned. Caption button responses are returned from `ClassicTitleBar::show`; the application sends the matching viewport commands or uses them for its own window actions.
 
 `ClassicButton`, `BevelFrame`, and `horizontal_separator` read the palette installed in the egui context. Pass `.palette(my_palette)` to a component when you want a local override.
@@ -140,13 +148,14 @@ The title, icon, menu labels, menu actions, and page contents remain application
 - `ClassicListView` provides a single-selection report view with beveled column headers, full-width row selection, keyboard navigation, and optional scrolling.
 - `ClassicTreeNode` and `ClassicTreeView` provide indented, selectable trees with dotted connectors, plus/minus expanders, keyboard navigation, and optional scrolling.
 - `ClassicToolbar` provides a reusable toolbar panel for application-defined controls. Its raised `ClassicToolbarButton`s can show a pressed selected state.
+- `ClassicTooltip` adds delayed, pointer-positioned pale-yellow tooltips to egui responses, including disabled controls.
 - `ClassicCheckbox`, `ClassicRadioButton`, `ClassicSlider`, `ClassicProgressBar`, `ClassicComboArrow`, `ClassicScrollButton`, and `ClassicStatusBar` provide reusable control visuals.
 
 Text editing, combo boxes, and collapsible groups remain egui controls, so their editing and keyboard behavior stays native. `ClassicCheckbox`, `ClassicRadioButton`, and `ClassicSlider` keep egui's interaction behavior while drawing the classic visuals; `ClassicTabs` provides a reusable classic tab row and panel.
 
 ## Design references
 
-The visual language is informed by *The Windows Interface Guidelines for Software Design* (Microsoft Press, 1995, ISBN 1-55615-679-0), including its list view, tree view, and toolbar guidance. Control comparisons also use period Windows 95 Explorer screenshots ([split tree and file panes](https://www.cs.oberlin.edu/~rms/mmcc/a/mod6/mod6411.html), [report list and toolbar](https://www.tech2u.com.au/training/tech2u/win95_1/copy.html)), [BevelDesk](https://github.com/marchildmann/BevelDesk), [98.css](https://github.com/jdan/98.css), egui's [custom window frame example](https://github.com/emilk/egui/tree/main/examples/custom_window_frame), and [egui_styled](https://github.com/dspray95/egui_styled).
+The visual language is informed by *The Windows Interface Guidelines for Software Design* (Microsoft Press, 1995, ISBN 1-55615-679-0), including its list view, tree view, toolbar, and tooltip guidance. Control comparisons also use period Windows 95 Explorer screenshots ([split tree and file panes](https://www.cs.oberlin.edu/~rms/mmcc/a/mod6/mod6411.html), [report list and toolbar](https://www.tech2u.com.au/training/tech2u/win95_1/copy.html)), [BevelDesk](https://github.com/marchildmann/BevelDesk), [98.css](https://github.com/jdan/98.css), egui's [custom window frame example](https://github.com/emilk/egui/tree/main/examples/custom_window_frame), and [egui_styled](https://github.com/dspray95/egui_styled).
 
 This is an independent homage. It ships no Microsoft assets or proprietary fonts.
 
