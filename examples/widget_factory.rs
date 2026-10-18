@@ -552,16 +552,17 @@ impl FactoryApp {
             self.catalog_scroll =
                 (self.catalog_scroll + direction * viewport_height * 0.85).clamp(0.0, max_scroll);
         }
-        if thumb.drag_started() {
+        if thumb.drag_started_by(PointerButton::Primary) {
             self.scrollbar_drag_start = Some(self.catalog_scroll);
         }
-        if thumb.dragged() {
+        if thumb.dragged_by(PointerButton::Primary) {
             let start = self.scrollbar_drag_start.unwrap_or(self.catalog_scroll);
+            let drag_distance = thumb.total_drag_delta().map_or(0.0, |delta| delta.y);
             self.catalog_scroll = (start
-                + thumb.drag_delta().y * max_scroll / thumb_travel.max(1.0))
+                + drag_distance * max_scroll / thumb_travel.max(1.0))
             .clamp(0.0, max_scroll);
         }
-        if thumb.drag_stopped() {
+        if thumb.drag_stopped_by(PointerButton::Primary) {
             self.scrollbar_drag_start = None;
         }
         ui.painter()
