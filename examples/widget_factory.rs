@@ -13,6 +13,11 @@ use egui_classic95::{
     paint_bevel,
 };
 
+const CLASSIC_TAB_HEIGHT: f32 = 19.0;
+const CLASSIC_TAB_TEXT_PADDING: f32 = 14.0;
+const CLASSIC_TAB_RAISE: f32 = 2.0;
+const CLASSIC_TAB_PANEL_OVERLAP: f32 = 2.0;
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -923,19 +928,35 @@ impl FactoryApp {
 
             ui.add_space(7.0);
             let titles = ["General", "Details", "About"];
+            let active_tab = self.active_tab;
+            let tab_font = FontId::proportional(13.0);
             let old_spacing = ui.spacing().item_spacing;
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             let mut tab_rects = Vec::with_capacity(titles.len());
             let mut tab_responses = Vec::with_capacity(titles.len());
             ui.horizontal(|ui| {
                 for (index, title) in titles.into_iter().enumerate() {
-                    let width = match title {
-                        "General" => 76.0,
-                        "Details" => 72.0,
-                        _ => 64.0,
+                    let text_width = ui
+                        .painter()
+                        .layout_no_wrap(title.to_owned(), tab_font.clone(), p.text)
+                        .size()
+                        .x
+                        .ceil();
+                    let width = text_width + CLASSIC_TAB_TEXT_PADDING;
+                    let (_, rect) = ui.allocate_space(vec2(width, CLASSIC_TAB_HEIGHT));
+                    let hit_rect = if index == active_tab {
+                        rect
+                    } else {
+                        Rect::from_min_max(
+                            pos2(rect.left(), rect.top() + CLASSIC_TAB_RAISE),
+                            rect.right_bottom(),
+                        )
                     };
-                    let (rect, response) =
-                        ui.allocate_exact_size(vec2(width, 22.0), Sense::click());
+                    let response = ui.interact(
+                        hit_rect,
+                        ui.make_persistent_id(("factory_tab", index)),
+                        Sense::click(),
+                    );
                     if response.clicked() {
                         self.active_tab = index;
                         self.last_action = format!("Opened {title} tab");
@@ -944,8 +965,7 @@ impl FactoryApp {
                     tab_responses.push(response);
                 }
             });
-            let active_tab = self.active_tab;
-            let panel = BevelFrame::sunken()
+            let panel = BevelFrame::raised()
                 .palette(p)
                 .fill(p.face)
                 .inner_margin(Margin::same(8))
@@ -1188,36 +1208,161 @@ fn paint_classic_tabs(
     panel: Rect,
     selected: usize,
 ) {
+    let mut tab_palette = palette;
+    tab_palette.light = Color32::from_rgb(0xDF, 0xDF, 0xDF);
+    tab_palette.dark_shadow = Color32::BLACK;
+
+    // The original page border supplies the lower edge beneath the inactive tabs.
+    // A selected tab covers its part of the border and joins the page surface.
+    let panel = panel.round_to_pixels(ui.pixels_per_point());
+    paint_bevel(ui.painter(), panel, Bevel::Raised, &tab_palette);
+
+    // Paint inactive tabs first so the selected tab sits above its neighbors.
     for (index, tab) in tabs.iter().copied().enumerate() {
-        if index == selected {
-            let active = Rect::from_min_max(tab.left_top(), pos2(tab.right(), panel.top() + 2.0));
-            ui.painter()
-                .rect_filled(active, CornerRadius::ZERO, palette.face);
-            paint_bevel(ui.painter(), active, Bevel::Raised, &palette);
-            // Remove the bottom bevel so the selected page joins its panel.
-            ui.painter().rect_filled(
-                Rect::from_min_max(
-                    pos2(active.left() + 1.0, panel.top()),
-                    pos2(active.right() - 1.0, panel.top() + 2.0),
-                ),
-                CornerRadius::ZERO,
-                palette.face,
-            );
-        } else {
-            let inactive =
-                Rect::from_min_max(tab.left_top(), pos2(tab.right(), tab.bottom() - 2.0));
-            ui.painter()
-                .rect_filled(inactive, CornerRadius::ZERO, palette.face);
-            paint_bevel(ui.painter(), inactive, Bevel::Raised, &palette);
+        if index != selected {
+            paint_classic_tab(ui, palette, &tab_palette, tab, panel, titles[index], false);
         }
-        ui.painter().text(
-            tab.center() + vec2(0.0, -1.0),
-            Align2::CENTER_CENTER,
-            titles[index],
-            FontId::proportional(13.0),
-            palette.text,
+    }
+    if let Some(tab) = tabs.get(selected).copied() {
+        paint_classic_tab(
+            ui,
+            palette,
+            &tab_palette,
+            tab,
+            panel,
+            titles[selected],
+            true,
         );
     }
+}
+
+fn paint_classic_tab(
+    ui: &Ui,
+    palette: Palette,
+    edge_palette: &Palette,
+    slot: Rect,
+    panel: Rect,
+    title: &str,
+    selected: bool,
+) {
+    let requested_top = slot.top() + if selected { 0.0 } else { CLASSIC_TAB_RAISE };
+    let bottom = if selected {
+        panel.top() + CLASSIC_TAB_PANEL_OVERLAP
+    } else {
+        panel.top()
+    };
+    let tab = Rect::from_min_max(pos2(slot.left(), requested_top), pos2(slot.right(), bottom))
+        .round_to_pixels(ui.pixels_per_point());
+    let painter = ui.painter();
+    painter.rect_filled(tab, CornerRadius::ZERO, palette.face);
+
+    let top = tab.top();
+    let left = tab.left();
+    let right = tab.right();
+    let side_end = if selected {
+        panel.top() + 1.0
+    } else {
+        panel.top()
+    };
+
+    // Draw edge runs as exact one-pixel rectangles so subpixel placement cannot blur them.
+    paint_classic_tab_pixels(
+        painter,
+        left + 2.0,
+        top,
+        right - left - 4.0,
+        1.0,
+        edge_palette.highlight,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        left + 1.0,
+        top + 1.0,
+        right - left - 3.0,
+        1.0,
+        edge_palette.highlight,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        left + 2.0,
+        top + 1.0,
+        right - left - 4.0,
+        1.0,
+        edge_palette.light,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        right - 2.0,
+        top + 1.0,
+        2.0,
+        1.0,
+        edge_palette.dark_shadow,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        right - 1.0,
+        top + 1.0,
+        1.0,
+        2.0,
+        palette.face,
+    );
+    let side_height = side_end - top - 2.0;
+    paint_classic_tab_pixels(
+        painter,
+        left,
+        top + 2.0,
+        1.0,
+        side_height,
+        edge_palette.highlight,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        left + 1.0,
+        top + 2.0,
+        1.0,
+        side_height,
+        edge_palette.light,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        right - 2.0,
+        top + 2.0,
+        1.0,
+        side_height,
+        edge_palette.shadow,
+    );
+    paint_classic_tab_pixels(
+        painter,
+        right - 1.0,
+        top + 2.0,
+        1.0,
+        side_height,
+        edge_palette.dark_shadow,
+    );
+
+    let text_center = pos2(slot.center().x, (top + panel.top()) * 0.5);
+    painter.text(
+        text_center,
+        Align2::CENTER_CENTER,
+        title,
+        FontId::proportional(13.0),
+        palette.text,
+    );
+}
+
+fn paint_classic_tab_pixels(
+    painter: &egui::Painter,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    color: Color32,
+) {
+    painter.rect_filled(
+        Rect::from_min_size(pos2(x, y), vec2(width, height)),
+        CornerRadius::ZERO,
+        color,
+    );
 }
 
 fn classic_checkbox(ui: &mut Ui, checked: &mut bool, label: &str, palette: Palette) -> Response {
