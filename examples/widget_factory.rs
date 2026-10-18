@@ -1464,17 +1464,15 @@ fn menu_row(ui: &mut Ui, label: &str, checked: bool, palette: Palette) -> Respon
 fn classic_menu_separator(ui: &mut Ui, palette: Palette) {
     let width = ui.available_width().max(190.0);
     let (rect, _) = ui.allocate_exact_size(vec2(width, 7.0), Sense::hover());
-    let x1 = rect.left() + 23.0;
-    let x2 = rect.right() - 3.0;
+    let x1 = rect.left() + 2.0;
+    let x2 = rect.right() - 2.0;
+    let separator_y = rect.center().y + 1.0;
     ui.painter().line_segment(
-        [pos2(x1, rect.center().y), pos2(x2, rect.center().y)],
+        [pos2(x1, separator_y), pos2(x2, separator_y)],
         Stroke::new(1.0, palette.shadow),
     );
     ui.painter().line_segment(
-        [
-            pos2(x1, rect.center().y + 1.0),
-            pos2(x2, rect.center().y + 1.0),
-        ],
+        [pos2(x1, separator_y + 1.0), pos2(x2, separator_y + 1.0)],
         Stroke::new(1.0, palette.highlight),
     );
 }
