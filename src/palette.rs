@@ -12,7 +12,7 @@ pub struct Palette {
     pub face: Color32,
     /// Outer top and left highlight (`#FFFFFF`).
     pub highlight: Color32,
-    /// Inner top and left highlight (`#DFDFDF`).
+    /// Inner top and left highlight, matching the default face (`#C0C0C0`).
     pub light: Color32,
     /// Inner bottom and right shadow (`#808080`).
     pub shadow: Color32,
@@ -45,7 +45,7 @@ impl Palette {
             desktop: Color32::from_rgb(0x00, 0x80, 0x80),
             face: Color32::from_rgb(0xC0, 0xC0, 0xC0),
             highlight: Color32::from_rgb(0xFF, 0xFF, 0xFF),
-            light: Color32::from_rgb(0xDF, 0xDF, 0xDF),
+            light: Color32::from_rgb(0xC0, 0xC0, 0xC0),
             shadow: Color32::from_rgb(0x80, 0x80, 0x80),
             dark_shadow: Color32::from_rgb(0x0A, 0x0A, 0x0A),
             text: Color32::from_rgb(0x00, 0x00, 0x00),
