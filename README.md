@@ -20,27 +20,52 @@ egui = "0.37"
 egui-classic95 = "0.1"
 ```
 
-Install the theme once during startup, then use the widgets anywhere in the UI:
+Installing `Classic95` sets egui's theme, palette, font preferences, and standard widget styling. It does not draw a custom window frame, title bar, or menus; applications add those explicitly with the public chrome components.
+
+Install the theme once during startup, then compose the reusable controls and window chrome:
 
 ```rust
-use egui_classic95::{BevelFrame, Classic95, ClassicButton};
+use egui_classic95::{
+    BevelFrame, Classic95, ClassicButton, ClassicMenuBar, ClassicMenuItem,
+    ClassicMenuPopup, ClassicSystemMenu, ClassicTitleBar, ClassicWindowFrame,
+};
 
 fn setup(ctx: &egui::Context) {
     Classic95::default().install(ctx);
 }
 
-fn controls(ui: &mut egui::Ui) {
-    if ui.add(ClassicButton::new("Apply")).clicked() {
-        // Apply changes.
-    }
+fn app_window(ui: &mut egui::Ui, show_toolbar: &mut bool) {
+    ClassicWindowFrame::new().show(ui, |ui| {
+        let title = ClassicTitleBar::new("My application").show(ui, |_painter, _icon_rect| {
+            // Draw an application-specific icon here.
+        });
+        ClassicSystemMenu::new(&title.system_menu).show(|ui| {
+            if ui.button("About").clicked() {
+                // Run an application-specific action.
+            }
+        });
 
-    BevelFrame::sunken().show(ui, |ui| {
-        ui.label("A recessed content well");
+        ClassicMenuBar::new().show(ui, |ui| {
+            ui.menu_button("View", |ui| {
+                ClassicMenuPopup::new().show(ui, |ui| {
+                    ui.add(ClassicMenuItem::check("Show toolbar", show_toolbar));
+                });
+            });
+        });
+
+        if ui.add(ClassicButton::new("Apply")).clicked() {
+            // Apply changes.
+        }
+        BevelFrame::sunken().show(ui, |ui| {
+            ui.label("A recessed content well");
+        });
     });
 }
 ```
 
-`ClassicButton`, `BevelFrame`, and `horizontal_separator` read the palette installed in the egui context. Pass `.palette(my_palette)` to a widget when you want a local override.
+The title, icon, menu labels, menu actions, and page contents remain application-owned. Caption button responses are returned from `ClassicTitleBar::show`; the application sends the matching viewport commands or uses them for its own window actions.
+
+`ClassicButton`, `BevelFrame`, and `horizontal_separator` read the palette installed in the egui context. Pass `.palette(my_palette)` to a component when you want a local override.
 
 ## Public pieces
 
@@ -50,8 +75,12 @@ fn controls(ui: &mut egui::Ui) {
 - `ClassicButton` draws a keyboard-focusable push button and supports a default-button outline.
 - `BevelFrame` wraps arbitrary egui content in a raised, sunken, or window-style panel.
 - `horizontal_separator` and `horizontal_separator_with_palette` draw an etched divider.
+- `ClassicWindowFrame`, `ClassicTitleBar`, and `CaptionButton` provide the raised clipped window frame and pixel-drawn title controls.
+- `ClassicSystemMenu`, `ClassicMenuBar`, `ClassicMenuPopup`, `ClassicMenuItem`, and `ClassicMenuSeparator` supply classic menu styling while leaving menu content to the application.
+- `ClassicGroupBox` and `ClassicTabs` provide the classic labeled group and raised tabbed panel.
+- `ClassicCheckbox`, `ClassicRadioButton`, `ClassicSlider`, `ClassicProgressBar`, `ClassicComboArrow`, `ClassicToolbarButton`, `ClassicScrollButton`, and `ClassicStatusBar` provide reusable control visuals.
 
-The library uses egui's standard controls for text editing, checkboxes, radio buttons, combo boxes, sliders, progress bars, tabs, and collapsible groups, so their state and keyboard behavior stay native to egui while inheriting the installed palette.
+Text editing, combo boxes, and collapsible groups remain egui controls, so their editing and keyboard behavior stays native. `ClassicCheckbox`, `ClassicRadioButton`, and `ClassicSlider` keep egui's interaction behavior while drawing the classic visuals; `ClassicTabs` provides a reusable classic tab row and panel.
 
 ## Design references
 
