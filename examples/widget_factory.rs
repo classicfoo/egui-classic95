@@ -217,13 +217,22 @@ impl FactoryApp {
 
     fn title_bar(&mut self, ui: &mut Ui, p: Palette) {
         let width = ui.available_width();
-        let (rect, _) = ui.allocate_exact_size(vec2(width, 27.0), Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(vec2(width, 19.0), Sense::hover());
+        // The top face row plus the 18-pixel blue strip matches the reference.
+        let caption_rect = Rect::from_min_max(
+            rect.min + vec2(1.0, 1.0),
+            rect.right_bottom() - vec2(1.0, 0.0),
+        );
         let painter = ui.painter();
-        painter.rect_filled(rect, CornerRadius::ZERO, p.active_title);
-        let icon_rect = Rect::from_min_size(rect.left_top() + vec2(5.0, 5.0), vec2(16.0, 16.0));
+        painter.rect_filled(rect, CornerRadius::ZERO, p.face);
+        painter.rect_filled(caption_rect, CornerRadius::ZERO, p.active_title);
+        let icon_rect = Rect::from_min_size(
+            pos2(rect.left() + 5.0, caption_rect.center().y - 8.0),
+            vec2(16.0, 16.0),
+        );
         draw_app_icon(painter, icon_rect);
         painter.text(
-            pos2(rect.left() + 27.0, rect.center().y),
+            pos2(rect.left() + 27.0, caption_rect.center().y),
             Align2::LEFT_CENTER,
             "Widget Factory",
             FontId::proportional(13.0),
@@ -231,10 +240,10 @@ impl FactoryApp {
         );
 
         let controls_width = 3.0 * 16.0 + 2.0;
-        let controls_left = rect.right() - controls_width - 6.0;
+        let controls_left = caption_rect.right() - controls_width - 2.0;
         let drag_rect = Rect::from_min_max(
-            pos2(icon_rect.right() + 2.0, rect.top()),
-            pos2(controls_left - 3.0, rect.bottom()),
+            pos2(icon_rect.right() + 2.0, caption_rect.top()),
+            pos2(controls_left - 3.0, caption_rect.bottom()),
         );
         let drag = ui.interact(
             drag_rect,
@@ -277,7 +286,7 @@ impl FactoryApp {
             });
 
         let button_size = vec2(16.0, 14.0);
-        let button_top = rect.top() + ((rect.height() - button_size.y) * 0.5).floor();
+        let button_top = caption_rect.top() + 2.0;
         let min_rect = Rect::from_min_size(pos2(controls_left, button_top), button_size)
             .round_to_pixels(ui.pixels_per_point());
         let max_rect = min_rect.translate(vec2(16.0, 0.0));
