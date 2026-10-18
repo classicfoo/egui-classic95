@@ -94,6 +94,7 @@ struct FactoryApp {
     slider: f32,
     progress: f32,
     active_tab: usize,
+    button_selected: bool,
     last_action: String,
     widget_probe: String,
     catalog_scroll: f32,
@@ -120,6 +121,7 @@ impl Default for FactoryApp {
             slider: 68.0,
             progress: 42.0,
             active_tab: 0,
+            button_selected: true,
             last_action: "Ready. Click a control to inspect it.".to_owned(),
             widget_probe: "No control selected".to_owned(),
             catalog_scroll: 0.0,
@@ -697,7 +699,7 @@ impl FactoryApp {
 
     fn show_buttons(&mut self, ui: &mut Ui, p: Palette) {
         section(ui, p, "Command buttons", |ui| {
-            ui.label("The button edge turns inward while pressed.");
+            ui.label("Selected buttons stay recessed with a checker pattern.");
             ui.add_space(7.0);
             ui.horizontal(|ui| {
                 let normal = ClassicButton::new("Apply")
@@ -725,6 +727,21 @@ impl FactoryApp {
                     .enabled(false)
                     .show(ui);
                 self.observe("Disabled Cancel", &disabled);
+
+                let toggle = ClassicButton::new("Pin")
+                    .palette(p)
+                    .min_size(vec2(82.0, 26.0))
+                    .selected(self.button_selected)
+                    .show(ui);
+                if toggle.clicked() {
+                    self.button_selected = !self.button_selected;
+                    self.last_action = if self.button_selected {
+                        "Pin button selected".to_owned()
+                    } else {
+                        "Pin button cleared".to_owned()
+                    };
+                }
+                self.observe("Selected Pin", &toggle);
             });
             ui.add_space(7.0);
             ui.horizontal(|ui| {

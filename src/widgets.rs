@@ -1,5 +1,5 @@
 use egui::{
-    Color32, CornerRadius, FontId, Frame, InnerResponse, Margin, Response, Sense, Stroke,
+    Color32, CornerRadius, FontId, Frame, InnerResponse, Margin, Rect, Response, Sense, Stroke,
     StrokeKind, TextStyle, Ui, Vec2, pos2, vec2,
 };
 
@@ -14,6 +14,7 @@ pub struct ClassicButton {
     min_size: Vec2,
     enabled: bool,
     default: bool,
+    selected: bool,
 }
 
 impl ClassicButton {
@@ -25,6 +26,7 @@ impl ClassicButton {
             min_size: Vec2::ZERO,
             enabled: true,
             default: false,
+            selected: false,
         }
     }
 
@@ -49,6 +51,12 @@ impl ClassicButton {
     /// Draw the heavier outline used by a dialog's default command button.
     pub fn default_button(mut self, is_default: bool) -> Self {
         self.default = is_default;
+        self
+    }
+
+    /// Display the option-set appearance for a button representing a persistent setting.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
         self
     }
 
@@ -80,8 +88,13 @@ impl ClassicButton {
         };
         let (rect, response) = ui.allocate_exact_size(desired_size, sense);
         let painter = ui.painter();
+        let pressed = response.is_pointer_button_down_on() || self.selected;
 
         painter.rect_filled(rect, CornerRadius::ZERO, palette.face);
+        if self.selected {
+            let inset = if self.default { 4.0 } else { 2.0 };
+            paint_option_set_checkerboard(ui, rect.shrink(inset), &palette);
+        }
         if self.default {
             painter.rect_stroke(
                 rect,
@@ -89,14 +102,14 @@ impl ClassicButton {
                 Stroke::new(1.0, palette.dark_shadow),
                 StrokeKind::Inside,
             );
-            let bevel = if response.is_pointer_button_down_on() {
+            let bevel = if pressed {
                 Bevel::Pressed
             } else {
                 Bevel::Raised
             };
             paint_bevel(painter, rect.shrink(2.0), bevel, &palette);
         } else {
-            let bevel = if response.is_pointer_button_down_on() {
+            let bevel = if pressed {
                 Bevel::Pressed
             } else {
                 Bevel::Raised
@@ -113,17 +126,43 @@ impl ClassicButton {
             );
         }
 
-        let offset = if response.is_pointer_button_down_on() {
-            vec2(1.0, 1.0)
-        } else {
-            Vec2::ZERO
-        };
+        let offset = if pressed { vec2(1.0, 1.0) } else { Vec2::ZERO };
         let text_pos = rect.center() - galley.size() * 0.5 + offset;
         painter.galley(text_pos, galley, text_color);
         response.widget_info(|| {
             egui::WidgetInfo::labeled(egui::Role::Button, self.enabled, &self.label)
         });
         response
+    }
+}
+
+fn paint_option_set_checkerboard(ui: &Ui, rect: Rect, palette: &Palette) {
+    let pixels_per_point = ui.pixels_per_point();
+    let pixel_size = 1.0 / pixels_per_point;
+    let min_x = (rect.left() * pixels_per_point).round() as i32;
+    let min_y = (rect.top() * pixels_per_point).round() as i32;
+    let max_x = (rect.right() * pixels_per_point).round() as i32;
+    let max_y = (rect.bottom() * pixels_per_point).round() as i32;
+    let mut mesh = egui::epaint::Mesh::default();
+
+    for y in min_y..max_y {
+        for x in min_x..max_x {
+            let color = if (x - min_x + y - min_y) % 2 == 0 {
+                palette.face
+            } else {
+                palette.highlight
+            };
+            let cell = Rect::from_min_size(
+                pos2(x as f32 * pixel_size, y as f32 * pixel_size),
+                Vec2::splat(pixel_size),
+            );
+            mesh.add_colored_rect(cell.intersect(rect), color);
+        }
+    }
+
+    if !mesh.is_empty() {
+        ui.painter()
+            .add(egui::Shape::Mesh(std::sync::Arc::new(mesh)));
     }
 }
 
