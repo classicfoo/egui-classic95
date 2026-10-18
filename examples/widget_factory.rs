@@ -1833,7 +1833,12 @@ fn classic_text_edit(
         .show(ui, |ui| {
             ui.add_sized(
                 [(size.x - 4.0).max(1.0), (size.y - 4.0).max(1.0)],
-                edit.frame(egui::Frame::NONE).margin(Margin::same(2)),
+                edit.frame(egui::Frame::NONE.inner_margin(Margin {
+                    left: 2,
+                    right: 2,
+                    top: 0,
+                    bottom: 0,
+                })),
             )
         })
         .inner
