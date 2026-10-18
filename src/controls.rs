@@ -303,18 +303,18 @@ impl<Value: PartialEq + Copy> ClassicRadioButton<'_, Value> {
         let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
         let response = ui.radio_value(self.selected, self.value, self.label);
         let (_, icon_rect) = ui.spacing().icon_rectangles(response.rect);
-        let origin = icon_rect.min.round_to_pixels(ui.pixels_per_point());
-        paint_bitmap_backdrop(
-            ui,
-            origin,
-            vec2(RADIO_PIXELS[0].len() as f32, RADIO_PIXELS.len() as f32),
+        let icon_size = vec2(RADIO_PIXELS[0].len() as f32, RADIO_PIXELS.len() as f32);
+        let origin = (icon_rect.center() - icon_size * 0.5).round_to_pixels(ui.pixels_per_point());
+        ui.painter().rect_filled(
+            Rect::from_center_size(icon_rect.center(), icon_rect.size() + vec2(4.0, 4.0)),
+            CornerRadius::ZERO,
             palette.face,
         );
         paint_palette_bitmap(ui, origin, &RADIO_PIXELS, palette);
         if *self.selected == self.value {
             paint_pixel_bitmap(
                 ui.painter(),
-                origin + vec2(0.0, 5.0),
+                origin + vec2(4.0, 4.0),
                 &RADIO_MARK_PIXELS,
                 palette.text,
             );
@@ -1178,33 +1178,19 @@ const CHECKBOX_PIXELS: [&str; 13] = [
 const CHECK_MARK_PIXELS: [&str; 7] = [
     "......#", ".....##", "#...###", "##.###.", "#####..", ".###...", "..#....",
 ];
-const RADIO_PIXELS: [&str; 20] = [
-    "..............",
-    ".....sssss....",
-    "...sss####ss..",
-    "..ss##WWWW..W.",
-    "..s#WWWWWWWW.W",
-    ".ss#WWWWWWWW.W",
-    ".s#WWWWWWWWWW.",
-    ".s#WWWWWWWWWW.",
-    "...sss####ss..",
-    "..ss##WWWW..W.",
-    "..s#WWWWWWWW.W",
-    ".ss#WWWWWWWW.W",
-    ".s#WWWWWWWWWW.",
-    ".s#WWWWWWWWWW.",
-    ".s#WWWWWWWWWW.",
-    ".s#WWWWWWWWWW.",
-    "..s#WWWWWWWW.W",
-    "..s#WWWWWWWW.W",
-    "...s..WWWW..WW",
-    "....WW....WWW.",
+const RADIO_PIXELS: [&str; 13] = [
+    "....ssss.....",
+    "..s######s...",
+    ".s#sWWWWW#s..",
+    ".#sWWsssWWs..",
+    "s#WW.....WWsW",
+    "s#Ws.....sWsW",
+    "s#Ws.....sWsW",
+    "s#Ws.....sWsW",
+    ".#WW.....WWsW",
+    ".s#WWsssWWsW.",
+    "..ssWWWWWs.W.",
+    "....sssssWW..",
+    "....WWWWW....",
 ];
-const RADIO_MARK_PIXELS: [&str; 6] = [
-    "......####....",
-    ".....######...",
-    ".....######...",
-    ".....######...",
-    ".....######...",
-    "......####....",
-];
+const RADIO_MARK_PIXELS: [&str; 5] = ["#####", "#####", "#####", "#####", "#####"];
