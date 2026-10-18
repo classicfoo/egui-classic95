@@ -828,8 +828,16 @@ impl FactoryApp {
                             .icon(move |ui, rect, _visuals, is_open| {
                                 draw_combo_arrow(ui, rect, p, is_open);
                             })
-                            .popup_style(egui::style::StyleModifier::new(|style| {
+                            .popup_style(egui::style::StyleModifier::new(move |style| {
                                 style.visuals.popup_shadow = egui::Shadow::NONE;
+                                style.visuals.window_fill = p.input;
+                                style.visuals.window_stroke = Stroke::new(1.0, p.text);
+                                style.visuals.window_corner_radius = CornerRadius::ZERO;
+                                style.visuals.menu_corner_radius = CornerRadius::ZERO;
+                                style.spacing.menu_margin = Margin::ZERO;
+                                style.spacing.item_spacing.y = 0.0;
+                                style.spacing.interact_size.y = 20.0;
+                                style.spacing.button_padding = vec2(3.0, 0.0);
                             }))
                             .show_ui(ui, |ui| {
                                 for option in ["Standard", "Large icons", "Details", "List"] {
@@ -840,7 +848,6 @@ impl FactoryApp {
                                     );
                                     selection_changed |= choice.changed();
                                 }
-                                paint_popup_bevel(ui, p);
                             })
                     })
                     .inner;
