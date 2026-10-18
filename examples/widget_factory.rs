@@ -230,8 +230,8 @@ impl FactoryApp {
             p.title_text,
         );
 
-        let controls_width = 3.0 * 16.0 + 2.0 * 3.0;
-        let controls_left = rect.right() - controls_width - 5.0;
+        let controls_width = 3.0 * 16.0 + 2.0;
+        let controls_left = rect.right() - controls_width - 6.0;
         let drag_rect = Rect::from_min_max(
             pos2(icon_rect.right() + 2.0, rect.top()),
             pos2(controls_left - 3.0, rect.bottom()),
@@ -276,11 +276,12 @@ impl FactoryApp {
                 paint_popup_bevel(ui, p);
             });
 
-        let y = rect.center().y - 7.0;
-        let min_rect = Rect::from_min_size(pos2(controls_left, y), vec2(16.0, 14.0))
+        let button_size = vec2(16.0, 14.0);
+        let button_top = rect.top() + ((rect.height() - button_size.y) * 0.5).floor();
+        let min_rect = Rect::from_min_size(pos2(controls_left, button_top), button_size)
             .round_to_pixels(ui.pixels_per_point());
-        let max_rect = min_rect.translate(vec2(19.0, 0.0));
-        let close_rect = min_rect.translate(vec2(38.0, 0.0));
+        let max_rect = min_rect.translate(vec2(16.0, 0.0));
+        let close_rect = min_rect.translate(vec2(34.0, 0.0));
         if caption_button(ui, min_rect, "factory-minimize", CaptionGlyph::Minimize, p).clicked() {
             ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
         }
