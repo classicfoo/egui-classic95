@@ -335,6 +335,7 @@ impl FactoryApp {
             .config(egui::menu::MenuConfig::new().style(menu_style))
             .ui(ui, |ui| {
                 ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+                ui.spacing_mut().button_padding.x = 4.0;
                 ui.add_space(4.0);
                 ui.menu_button("File", |ui| {
                     ui.set_width(190.0);
