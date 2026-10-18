@@ -5,7 +5,7 @@
 - Treat `examples/widget_factory.rs` as the visual showcase for the library.
 - For requested UI or theme changes, build it with `cargo build --example widget_factory`, run it, capture a fresh screenshot, and show the screenshot in the response.
 - If no display is attached, run the example under Xvfb at 1200×850 and capture the screen with Pillow's `ImageGrab`. Keep preview images in `/tmp` unless the user asks to add them to the repository.
-- For exploratory comparisons, apply alternate fonts or styles only to the preview. Keep the project's current default until the user asks to switch it.
+- Keep exploratory font and style comparisons isolated to previews. When the user chooses a variant, update the project default.
 
 ## Git workflow
 

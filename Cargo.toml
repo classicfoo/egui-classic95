@@ -12,6 +12,9 @@ categories = ["gui"]
 [dependencies]
 egui = "0.37"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+egui_system_font_provider = "0.37"
+
 [dev-dependencies]
 eframe = "0.37"
 

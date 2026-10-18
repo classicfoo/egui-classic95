@@ -1,8 +1,10 @@
 use egui::style::HandleShape;
 use egui::{
-    Color32, Context, CornerRadius, FontData, FontFamily, FontId, FontInsert, FontPriority, Id,
-    InsertFontFamily, Margin, Shadow, Stroke, Style, TextStyle, Theme, vec2,
+    Color32, Context, CornerRadius, FontId, Id, Margin, Shadow, Stroke, Style, TextStyle, Theme,
+    vec2,
 };
+#[cfg(not(target_arch = "wasm32"))]
+use egui::{FallbackRequest, FontFamily, FontPriority, InsertFontFamily};
 
 use crate::Palette;
 
@@ -98,18 +100,13 @@ impl Classic95 {
     /// Install the theme for the current egui context.
     ///
     /// This selects egui's light theme and also updates the style used by new
-    /// menus and popups. It also installs the bundled WIN95FA font as the
-    /// proportional font, keeping egui's fonts available as fallbacks. Call it
-    /// during setup, or again after changing the palette.
+    /// menus and popups. On native platforms, it asynchronously installs the
+    /// system's generic sans-serif font as the proportional font, keeping
+    /// egui's fonts available as fallbacks. Call it during setup, or again
+    /// after changing the palette.
     pub fn install(&self, ctx: &Context) {
-        ctx.add_font(FontInsert::new(
-            "egui-classic95-win95fa",
-            FontData::from_static(include_bytes!("../assets/fonts/WIN95FA.otf")),
-            vec![InsertFontFamily {
-                family: FontFamily::Proportional,
-                priority: FontPriority::Highest,
-            }],
-        ));
+        #[cfg(not(target_arch = "wasm32"))]
+        install_system_sans_font(ctx);
 
         let style = self.style();
         ctx.data_mut(|data| {
@@ -119,6 +116,45 @@ impl Classic95 {
         ctx.set_theme(Theme::Light);
         ctx.set_global_style(style);
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn install_system_sans_font(ctx: &Context) {
+    let install_started = ctx.data_mut(|data| {
+        let id = Id::unique("egui-classic95-system-sans-install-started");
+        if data.get_temp::<bool>(id).unwrap_or(false) {
+            false
+        } else {
+            data.insert_temp(id, true);
+            true
+        }
+    });
+
+    if !install_started {
+        return;
+    }
+
+    let ctx = ctx.clone();
+    std::thread::spawn(move || {
+        let provider = egui_system_font_provider::SystemFontProvider::new();
+        let family = FontFamily::Proportional;
+        // Ask for a Latin glyph, then promote the system's matching sans-serif face to primary.
+        let request = FallbackRequest {
+            cluster: "A",
+            family: &family,
+        };
+        let Some(mut font) = egui::FontProvider::font_for(&provider, &request) else {
+            return;
+        };
+
+        font.name = format!("egui-classic95-system-sans:{}", font.name);
+        font.families = vec![InsertFontFamily {
+            family,
+            priority: FontPriority::Highest,
+        }];
+        ctx.add_font(font);
+        ctx.request_repaint();
+    });
 }
 
 pub(crate) fn palette_for(ctx: &Context) -> Palette {
