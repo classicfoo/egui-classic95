@@ -406,8 +406,16 @@ impl FactoryApp {
             .show(ui, |ui| {
                 ui.set_min_width(ui.available_width());
                 for page in Page::ALL {
-                    let response = ui.selectable_value(&mut self.page, page, page.label());
+                    // Stretch each selectable row so its highlight fills the list width.
+                    let response = ui.add(
+                        egui::Button::selectable(
+                            self.page == page,
+                            (page.label(), egui::Atom::grow()),
+                        )
+                        .min_size(vec2(ui.available_width(), 0.0)),
+                    );
                     if response.clicked() {
+                        self.page = page;
                         self.last_action = format!("Opened {}", page.label());
                         self.catalog_scroll = 0.0;
                     }
