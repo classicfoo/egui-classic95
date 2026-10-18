@@ -806,7 +806,7 @@ impl FactoryApp {
 
             ui.horizontal(|ui| {
                 for (index, label) in ["Typical", "Compact", "Custom"].into_iter().enumerate() {
-                    let response = ui.radio_value(&mut self.radio_choice, index, label);
+                    let response = classic_radio_value(ui, &mut self.radio_choice, index, label, p);
                     if response.changed() {
                         self.last_action = format!("Selected {label}");
                     }
@@ -1375,32 +1375,180 @@ fn paint_classic_tab_pixels(
     );
 }
 
+const CHECKBOX_PIXELS: [&str; 13] = [
+    "ssssssssssssW",
+    "s##########.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s#WWWWWWWWW.W",
+    "s...........W",
+    "WWWWWWWWWWWWW",
+];
+
+const CHECK_MARK_PIXELS: [&str; 7] = [
+    "......#", ".....##", "#...###", "##.###.", "#####..", ".###...", "..#....",
+];
+
+const RADIO_PIXELS: [&str; 14] = [
+    "..............",
+    ".....sssss....",
+    "...sss####ss..",
+    "..ss##WWWW..W.",
+    "..s#WWWWWWWW.W",
+    ".ss#WWWWWWWW.W",
+    ".s#WWWWWWWWWW.",
+    ".s#WWWWWWWWWW.",
+    ".s#WWWWWWWWWW.",
+    ".s#WWWWWWWWWW.",
+    "..s#WWWWWWWW.W",
+    "..s#WWWWWWWW.W",
+    "...s..WWWW..WW",
+    "....WW....WWW.",
+];
+
+const RADIO_MARK_PIXELS: [&str; 6] = [
+    "......####....",
+    ".....######...",
+    ".....######...",
+    ".....######...",
+    ".....######...",
+    "......####....",
+];
+
 fn classic_checkbox(ui: &mut Ui, checked: &mut bool, label: &str, palette: Palette) -> Response {
     let response = ui.checkbox(checked, label);
-    let size = 13.0;
-    let box_rect = Rect::from_center_size(
-        pos2(response.rect.left() + size * 0.5, response.rect.center().y),
-        vec2(size, size),
+    let pixels_per_point = ui.pixels_per_point();
+    let origin = pos2(
+        response.rect.left(),
+        response.rect.center().y - CHECKBOX_PIXELS.len() as f32 * 0.5,
+    )
+    .round_to_pixels(pixels_per_point);
+
+    paint_bitmap_backdrop(
+        ui,
+        origin,
+        vec2(
+            CHECKBOX_PIXELS[0].len() as f32,
+            CHECKBOX_PIXELS.len() as f32,
+        ),
+        palette.face,
     );
-    ui.painter()
-        .rect_filled(box_rect, CornerRadius::ZERO, palette.input);
-    paint_bevel(ui.painter(), box_rect, Bevel::Sunken, &palette);
+    paint_checkbox_pixels(ui, origin, palette);
     if *checked {
-        let mark = box_rect.shrink(3.0);
-        ui.painter().add(egui::Shape::line(
-            vec![
-                pos2(mark.left(), mark.center().y),
-                pos2(mark.center().x - 0.5, mark.bottom()),
-                pos2(mark.right(), mark.top()),
-            ],
-            Stroke::new(1.4, palette.text),
-        ));
+        paint_pixel_bitmap(
+            ui,
+            origin + vec2(3.0, 3.0),
+            &CHECK_MARK_PIXELS,
+            palette.text,
+        );
     }
     response
 }
 
+fn classic_radio_value(
+    ui: &mut Ui,
+    selected: &mut usize,
+    value: usize,
+    label: &str,
+    palette: Palette,
+) -> Response {
+    let response = ui.radio_value(selected, value, label);
+    let (_, icon_rect) = ui.spacing().icon_rectangles(response.rect);
+    let origin = icon_rect.min.round_to_pixels(ui.pixels_per_point());
+    paint_bitmap_backdrop(
+        ui,
+        origin,
+        vec2(RADIO_PIXELS[0].len() as f32, RADIO_PIXELS.len() as f32),
+        palette.face,
+    );
+    paint_radio_pixels(ui, origin, palette);
+    if *selected == value {
+        paint_pixel_bitmap(
+            ui,
+            origin + vec2(0.0, 5.0),
+            &RADIO_MARK_PIXELS,
+            palette.text,
+        );
+    }
+    response
+}
+
+fn paint_checkbox_pixels(ui: &Ui, origin: egui::Pos2, palette: Palette) {
+    paint_palette_bitmap(ui, origin, &CHECKBOX_PIXELS, palette);
+}
+
+fn paint_radio_pixels(ui: &Ui, origin: egui::Pos2, palette: Palette) {
+    paint_palette_bitmap(ui, origin, &RADIO_PIXELS, palette);
+}
+
+fn paint_bitmap_backdrop(ui: &Ui, origin: egui::Pos2, size: egui::Vec2, color: Color32) {
+    let rect = Rect::from_min_size(origin - vec2(1.0, 1.0), size + vec2(2.0, 2.0));
+    ui.painter().rect_filled(rect, CornerRadius::ZERO, color);
+}
+
+fn paint_palette_bitmap(ui: &Ui, origin: egui::Pos2, rows: &[&str], palette: Palette) {
+    let pixels_per_point = ui.pixels_per_point();
+    let origin = origin.round_to_pixels(pixels_per_point);
+    let mut mesh = egui::epaint::Mesh::default();
+    for (row, pixels) in rows.iter().enumerate() {
+        for (column, pixel) in pixels.bytes().enumerate() {
+            let color = match pixel {
+                b's' => palette.shadow,
+                b'#' => palette.text,
+                b'W' => palette.highlight,
+                _ => palette.face,
+            };
+            let rect =
+                Rect::from_min_size(origin + vec2(column as f32, row as f32), vec2(1.0, 1.0));
+            mesh.add_colored_rect(rect, color);
+        }
+    }
+    ui.painter()
+        .add(egui::Shape::Mesh(std::sync::Arc::new(mesh)));
+}
+
+fn paint_pixel_bitmap(ui: &Ui, origin: egui::Pos2, rows: &[&str], color: Color32) {
+    let pixels_per_point = ui.pixels_per_point();
+    let origin = origin.round_to_pixels(pixels_per_point);
+    let mut mesh = egui::epaint::Mesh::default();
+    for (row, pixels) in rows.iter().enumerate() {
+        for (column, pixel) in pixels.bytes().enumerate() {
+            if pixel == b'#' {
+                let rect =
+                    Rect::from_min_size(origin + vec2(column as f32, row as f32), vec2(1.0, 1.0));
+                mesh.add_colored_rect(rect, color);
+            }
+        }
+    }
+    if !mesh.is_empty() {
+        ui.painter()
+            .add(egui::Shape::Mesh(std::sync::Arc::new(mesh)));
+    }
+}
+
+const MENU_CHECK_PIXELS: [&str; 7] = CHECK_MARK_PIXELS;
+const MENU_RADIO_PIXELS: [&str; 5] = [".###.", "#####", "#####", "#####", ".###."];
+
+#[derive(Clone, Copy)]
+enum MenuMark {
+    None,
+    Check,
+    Radio,
+}
+
 fn classic_menu_toggle(ui: &mut Ui, value: &mut bool, label: &str, palette: Palette) -> Response {
-    let response = menu_row(ui, label, *value, palette);
+    let mark = if *value {
+        MenuMark::Check
+    } else {
+        MenuMark::None
+    };
+    let response = menu_row(ui, label, mark, palette);
     if response.clicked() {
         *value = !*value;
         let mut response = response;
@@ -1411,7 +1559,12 @@ fn classic_menu_toggle(ui: &mut Ui, value: &mut bool, label: &str, palette: Pale
 }
 
 fn classic_menu_choice(ui: &mut Ui, selected: bool, label: &str, palette: Palette) -> Response {
-    menu_row(ui, label, selected, palette)
+    let mark = if selected {
+        MenuMark::Radio
+    } else {
+        MenuMark::None
+    };
+    menu_row(ui, label, mark, palette)
 }
 
 fn paint_popup_bevel(ui: &Ui, palette: Palette) {
@@ -1426,7 +1579,7 @@ fn paint_popup_bevel(ui: &Ui, palette: Palette) {
     paint_bevel(&painter, rect, Bevel::Raised, &palette);
 }
 
-fn menu_row(ui: &mut Ui, label: &str, checked: bool, palette: Palette) -> Response {
+fn menu_row(ui: &mut Ui, label: &str, mark: MenuMark, palette: Palette) -> Response {
     let width = ui.available_width().max(190.0);
     let (rect, response) = ui.allocate_exact_size(vec2(width, 22.0), Sense::click());
     let highlighted = response.hovered() || response.is_pointer_button_down_on();
@@ -1439,17 +1592,20 @@ fn menu_row(ui: &mut Ui, label: &str, checked: bool, palette: Palette) -> Respon
         ui.painter()
             .rect_filled(rect, CornerRadius::ZERO, palette.selection);
     }
-    if checked {
-        let x = rect.left() + 11.0;
-        let y = rect.center().y;
-        ui.painter().add(egui::Shape::line(
-            vec![
-                pos2(x - 3.0, y),
-                pos2(x - 0.5, y + 3.0),
-                pos2(x + 4.0, y - 3.0),
-            ],
-            Stroke::new(1.5, text_color),
-        ));
+    match mark {
+        MenuMark::None => {}
+        MenuMark::Check => paint_pixel_bitmap(
+            ui,
+            pos2(rect.left() + 8.0, rect.center().y - 3.0),
+            &MENU_CHECK_PIXELS,
+            text_color,
+        ),
+        MenuMark::Radio => paint_pixel_bitmap(
+            ui,
+            pos2(rect.left() + 9.0, rect.center().y - 2.0),
+            &MENU_RADIO_PIXELS,
+            text_color,
+        ),
     }
     ui.painter().text(
         pos2(rect.left() + 25.0, rect.center().y),
