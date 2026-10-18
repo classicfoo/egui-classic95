@@ -179,7 +179,7 @@ impl FactoryApp {
                 self.toolbar(ui, p);
             }
 
-            let status_height = if self.show_status_bar { 30.0 } else { 0.0 };
+            let status_height = if self.show_status_bar { 25.0 } else { 0.0 };
             let main_height = (ui.available_height() - status_height).max(250.0);
             let nav_width = 176.0;
             let inspector_width = 220.0;
@@ -216,7 +216,6 @@ impl FactoryApp {
             });
 
             if self.show_status_bar {
-                ui.add_space(5.0);
                 self.status_bar(ui, p);
             }
         });
@@ -590,6 +589,7 @@ impl FactoryApp {
     fn resize_handles(&self, ui: &mut Ui, rect: Rect) {
         let edge = 5.0;
         let corner = 9.0;
+        let southeast_corner = if self.show_status_bar { 17.0 } else { corner };
         let handles = [
             (
                 "resize-n",
@@ -604,7 +604,7 @@ impl FactoryApp {
                 "resize-s",
                 Rect::from_min_max(
                     pos2(rect.left() + corner, rect.bottom() - edge),
-                    pos2(rect.right() - corner, rect.bottom() + edge),
+                    pos2(rect.right() - southeast_corner, rect.bottom() + edge),
                 ),
                 ResizeDirection::South,
                 egui::CursorIcon::ResizeVertical,
@@ -613,7 +613,7 @@ impl FactoryApp {
                 "resize-e",
                 Rect::from_min_max(
                     pos2(rect.right() - edge, rect.top() + corner),
-                    pos2(rect.right() + edge, rect.bottom() - corner),
+                    pos2(rect.right() + edge, rect.bottom() - southeast_corner),
                 ),
                 ResizeDirection::East,
                 egui::CursorIcon::ResizeHorizontal,
@@ -648,7 +648,7 @@ impl FactoryApp {
             (
                 "resize-se",
                 Rect::from_min_max(
-                    pos2(rect.right() - corner, rect.bottom() - corner),
+                    pos2(rect.right() - southeast_corner, rect.bottom() - southeast_corner),
                     pos2(rect.right() + edge, rect.bottom() + edge),
                 ),
                 ResizeDirection::SouthEast,
@@ -1090,14 +1090,13 @@ impl FactoryApp {
     }
 
     fn status_bar(&self, ui: &mut Ui, p: Palette) {
-        // Reserve a small client-area gutter so the status bevel reads as its
-        // own control instead of touching the window's raised outer frame.
-        let (bounds, _) = ui.allocate_exact_size(vec2(ui.available_width(), 25.0), Sense::hover());
-        let rect = bounds.shrink(2.0);
-        ui.painter().rect_filled(rect, CornerRadius::ZERO, p.face);
-        paint_bevel(ui.painter(), rect, Bevel::Sunken, &p);
+        let visible_width = (ui.clip_rect().right() - ui.cursor().left()).max(0.0);
+        let width = ui.available_width().min(visible_width);
+        let (bounds, _) = ui.allocate_exact_size(vec2(width, 25.0), Sense::hover());
+        ui.painter().rect_filled(bounds, CornerRadius::ZERO, p.face);
+        paint_status_field_border(ui.painter(), bounds, p);
         ui.painter().text(
-            rect.left_center() + vec2(6.0, 0.0),
+            bounds.left_center() + vec2(6.0, 0.0),
             Align2::LEFT_CENTER,
             self.page.label(),
             FontId::proportional(11.0),
@@ -1105,19 +1104,19 @@ impl FactoryApp {
         );
         ui.painter().line_segment(
             [
-                rect.right_top() + vec2(-103.0, 3.0),
-                rect.right_bottom() + vec2(-103.0, -3.0),
+                bounds.right_top() + vec2(-103.0, 3.0),
+                bounds.right_bottom() + vec2(-103.0, -3.0),
             ],
             Stroke::new(1.0, p.shadow),
         );
         ui.painter().text(
-            rect.right_center() + vec2(-23.0, 0.0),
+            bounds.right_center() + vec2(-23.0, 0.0),
             Align2::RIGHT_CENTER,
             format!("Page {} of {}", self.page.index() + 1, Page::ALL.len()),
             FontId::proportional(11.0),
             p.text,
         );
-        draw_size_grip(ui.painter(), rect, p);
+        draw_size_grip(ui, bounds, p);
     }
 
     fn observe(&mut self, label: &str, response: &Response) {
@@ -2149,24 +2148,48 @@ fn draw_app_icon(painter: &egui::Painter, rect: Rect) {
     );
 }
 
-fn draw_size_grip(painter: &egui::Painter, rect: Rect, palette: Palette) {
-    let start = rect.right_bottom() - vec2(13.0, 3.0);
-    for (x_offset, y_offset) in [
-        (8.0, 0.0),
-        (5.0, 3.0),
-        (2.0, 6.0),
-        (11.0, 3.0),
-        (8.0, 6.0),
-        (5.0, 9.0),
-    ] {
-        let point = start + vec2(x_offset, y_offset);
-        painter.line_segment(
-            [point, point + vec2(2.0, 0.0)],
-            Stroke::new(1.0, palette.shadow),
-        );
-        painter.line_segment(
-            [point + vec2(0.0, 1.0), point + vec2(2.0, 1.0)],
-            Stroke::new(1.0, palette.highlight),
-        );
-    }
+const STATUS_SIZE_GRIP_PIXELS: [&str; 13] = [
+    ".............",
+    "............W",
+    "...........WW",
+    "..........WWs",
+    ".........WWss",
+    "........WWssW",
+    ".......WWssWW",
+    "......WWssWWs",
+    ".....WWssWWss",
+    "....WWssWWssW",
+    "...WWssWWssWW",
+    "..WWssWWssWWs",
+    ".WWssWWssWWss",
+];
+
+fn draw_size_grip(ui: &Ui, rect: Rect, palette: Palette) {
+    let origin = pos2(rect.right() - 14.0, rect.bottom() - 14.0);
+    paint_palette_bitmap(ui, origin, &STATUS_SIZE_GRIP_PIXELS, palette);
+}
+
+fn paint_status_field_border(painter: &egui::Painter, rect: Rect, palette: Palette) {
+    // The Win95 status-field style uses one sunken outer border only.
+    let left = rect.left() + 0.5;
+    let top = rect.top() + 0.5;
+    let right = rect.right() - 0.5;
+    let bottom = rect.bottom() - 0.5;
+
+    painter.line_segment(
+        [pos2(left, top), pos2(right, top)],
+        Stroke::new(1.0, palette.shadow),
+    );
+    painter.line_segment(
+        [pos2(left, top), pos2(left, bottom)],
+        Stroke::new(1.0, palette.shadow),
+    );
+    painter.line_segment(
+        [pos2(left, bottom), pos2(right, bottom)],
+        Stroke::new(1.0, palette.highlight),
+    );
+    painter.line_segment(
+        [pos2(right, top), pos2(right, bottom)],
+        Stroke::new(1.0, palette.highlight),
+    );
 }
