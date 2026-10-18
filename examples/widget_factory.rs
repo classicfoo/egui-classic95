@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_lines)]
 
 use eframe::egui;
+use eframe::emath::GuiRounding;
 use egui::scroll_area::ScrollBarVisibility;
 use egui::{
     Align, Align2, Color32, CornerRadius, FontId, Id, Layout, Margin, PointerButton, Rect,
@@ -229,7 +230,7 @@ impl FactoryApp {
             p.title_text,
         );
 
-        let controls_width = 3.0 * 18.0 + 2.0 * 3.0;
+        let controls_width = 3.0 * 16.0 + 2.0 * 3.0;
         let controls_left = rect.right() - controls_width - 5.0;
         let drag_rect = Rect::from_min_max(
             pos2(icon_rect.right() + 2.0, rect.top()),
@@ -275,10 +276,11 @@ impl FactoryApp {
                 paint_popup_bevel(ui, p);
             });
 
-        let y = rect.center().y - 9.0;
-        let min_rect = Rect::from_min_size(pos2(controls_left, y), vec2(18.0, 18.0));
-        let max_rect = min_rect.translate(vec2(21.0, 0.0));
-        let close_rect = min_rect.translate(vec2(42.0, 0.0));
+        let y = rect.center().y - 7.0;
+        let min_rect = Rect::from_min_size(pos2(controls_left, y), vec2(16.0, 14.0))
+            .round_to_pixels(ui.pixels_per_point());
+        let max_rect = min_rect.translate(vec2(19.0, 0.0));
+        let close_rect = min_rect.translate(vec2(38.0, 0.0));
         if caption_button(ui, min_rect, "factory-minimize", CaptionGlyph::Minimize, p).clicked() {
             ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
         }
@@ -1631,71 +1633,140 @@ fn caption_button(
     palette: Palette,
 ) -> Response {
     let response = ui.interact(rect, Id::unique(id), Sense::click());
-    ui.painter()
-        .rect_filled(rect, CornerRadius::ZERO, palette.face);
-    paint_bevel(
-        ui.painter(),
-        rect,
-        if response.is_pointer_button_down_on() {
-            Bevel::Pressed
-        } else {
-            Bevel::Raised
-        },
-        &palette,
-    );
+    let painter = ui.painter();
+    painter.rect_filled(rect, CornerRadius::ZERO, palette.face);
+    if response.is_pointer_button_down_on() {
+        paint_bevel(painter, rect, Bevel::Pressed, &palette);
+    } else {
+        paint_caption_button_bevel(painter, rect, &palette);
+    }
 
-    let stroke = Stroke::new(1.0, palette.text);
     match glyph {
         CaptionGlyph::Minimize => {
-            ui.painter().line_segment(
-                [
-                    rect.left_bottom() + vec2(5.0, -4.0),
-                    rect.right_bottom() + vec2(-5.0, -4.0),
-                ],
-                stroke,
-            );
+            paint_caption_pixels(painter, rect, 4, 9, &["######", "######"], palette.text);
         }
         CaptionGlyph::Maximize => {
-            ui.painter().rect_stroke(
-                rect.shrink(4.0),
-                CornerRadius::ZERO,
-                stroke,
-                StrokeKind::Inside,
+            paint_caption_pixels(
+                painter,
+                rect,
+                3,
+                2,
+                &[
+                    "#########",
+                    "#########",
+                    "#.......#",
+                    "#.......#",
+                    "#.......#",
+                    "#.......#",
+                    "#.......#",
+                    "#.......#",
+                    "#########",
+                ],
+                palette.text,
             );
         }
         CaptionGlyph::Restore => {
-            let back = Rect::from_min_max(
-                rect.left_top() + vec2(6.0, 3.0),
-                rect.right_bottom() - vec2(3.0, 6.0),
+            paint_caption_pixels(
+                painter,
+                rect,
+                3,
+                2,
+                &[
+                    "  ########",
+                    "  ########",
+                    "  #......#",
+                    "#########.",
+                    "#########.",
+                    "#......##.",
+                    "#......##.",
+                    "#......##.",
+                    "#......##.",
+                    "#########.",
+                ],
+                palette.text,
             );
-            let front = back.translate(vec2(-3.0, 3.0));
-            ui.painter()
-                .rect_filled(front, CornerRadius::ZERO, palette.face);
-            ui.painter()
-                .rect_stroke(back, CornerRadius::ZERO, stroke, StrokeKind::Inside);
-            ui.painter()
-                .rect_stroke(front, CornerRadius::ZERO, stroke, StrokeKind::Inside);
-            ui.painter()
-                .line_segment([back.left_top(), pos2(back.right(), back.top())], stroke);
         }
         CaptionGlyph::Close => {
-            ui.painter().line_segment(
-                [
-                    rect.left_top() + vec2(5.0, 4.0),
-                    rect.right_bottom() + vec2(-5.0, -4.0),
+            paint_caption_pixels(
+                painter,
+                rect,
+                4,
+                3,
+                &[
+                    "##....##",
+                    ".##..##.",
+                    "..####..",
+                    "...##...",
+                    "..####..",
+                    ".##..##.",
+                    "##....##",
                 ],
-                stroke,
-            );
-            ui.painter().line_segment(
-                [
-                    rect.right_top() + vec2(-5.0, 4.0),
-                    rect.left_bottom() + vec2(5.0, -4.0),
-                ],
-                stroke,
+                palette.text,
             );
         }
     }
     response
+}
+
+fn paint_caption_button_bevel(painter: &egui::Painter, rect: Rect, palette: &Palette) {
+    paint_caption_rect(painter, rect, 14, 1, 1, 12, palette.shadow);
+    paint_caption_rect(painter, rect, 1, 12, 14, 1, palette.shadow);
+    paint_caption_rect(painter, rect, 0, 0, 15, 1, palette.highlight);
+    paint_caption_rect(painter, rect, 0, 0, 1, 13, palette.highlight);
+    paint_caption_rect(painter, rect, 15, 0, 1, 13, palette.text);
+    paint_caption_rect(painter, rect, 0, 13, 16, 1, palette.text);
+}
+
+fn paint_caption_pixels(
+    painter: &egui::Painter,
+    rect: Rect,
+    offset_x: usize,
+    offset_y: usize,
+    rows: &[&str],
+    color: Color32,
+) {
+    // Draw the bitmap cells in one mesh so egui's antialiased thin-rectangle
+    // path cannot widen the one-pixel strokes.
+    let mut mesh = egui::Mesh::default();
+    for (y, row) in rows.iter().enumerate() {
+        let pixels = row.as_bytes();
+        let mut x = 0;
+        while x < pixels.len() {
+            if pixels[x] != b'#' {
+                x += 1;
+                continue;
+            }
+
+            let start = x;
+            while x < pixels.len() && pixels[x] == b'#' {
+                x += 1;
+            }
+            mesh.add_colored_rect(
+                Rect::from_min_size(
+                    rect.min + vec2((offset_x + start) as f32, (offset_y + y) as f32),
+                    vec2((x - start) as f32, 1.0),
+                ),
+                color,
+            );
+        }
+    }
+    painter.add(egui::Shape::mesh(mesh));
+}
+
+fn paint_caption_rect(
+    painter: &egui::Painter,
+    button_rect: Rect,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    color: Color32,
+) {
+    let rect = Rect::from_min_size(
+        button_rect.min + vec2(x as f32, y as f32),
+        vec2(width as f32, height as f32),
+    );
+    painter.rect_filled(rect, CornerRadius::ZERO, color);
 }
 
 fn draw_app_icon(painter: &egui::Painter, rect: Rect) {
