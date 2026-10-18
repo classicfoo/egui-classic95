@@ -9,11 +9,12 @@ use egui::{
 };
 use egui_classic95::{
     Bevel, BevelFrame, Classic95, ClassicButton, ClassicCheckbox, ClassicComboArrow,
-    ClassicGroupBox, ClassicListBox, ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup,
-    ClassicMenuSeparator, ClassicProgressBar, ClassicRadioButton, ClassicScrollBar, ClassicSlider,
-    ClassicStatusBar, ClassicSystemMenu, ClassicTabs, ClassicTitleBar, ClassicToolbarButton,
-    ClassicWindowFrame, Palette, classic_popup_style, horizontal_separator_with_palette,
-    paint_bevel, vertical_separator_with_palette,
+    ClassicGroupBox, ClassicListBox, ClassicListView, ClassicListViewColumn, ClassicMenuBar,
+    ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator, ClassicProgressBar,
+    ClassicRadioButton, ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicSystemMenu,
+    ClassicTabs, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton, ClassicTreeNode,
+    ClassicTreeView, ClassicWindowFrame, Palette, classic_popup_style,
+    horizontal_separator_with_palette, paint_bevel, vertical_separator_with_palette,
 };
 use std::{cell::Cell, rc::Rc};
 
@@ -47,17 +48,19 @@ enum Page {
     Selection,
     Ranges,
     Containers,
+    Lists,
     Palette,
 }
 
 impl Page {
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 8] = [
         Self::Overview,
         Self::Buttons,
         Self::TextFields,
         Self::Selection,
         Self::Ranges,
         Self::Containers,
+        Self::Lists,
         Self::Palette,
     ];
 
@@ -69,6 +72,7 @@ impl Page {
             Self::Selection => "Selection",
             Self::Ranges => "Ranges & feedback",
             Self::Containers => "Containers",
+            Self::Lists => "Lists & toolbar",
             Self::Palette => "Palette",
         }
     }
@@ -95,6 +99,9 @@ struct FactoryApp {
     progress: f32,
     active_tab: usize,
     button_selected: bool,
+    toolbar_mode: bool,
+    listview_selected: Option<usize>,
+    treeview_selected: Option<Vec<usize>>,
     last_action: String,
     widget_probe: String,
     catalog_scroll: f32,
@@ -122,6 +129,9 @@ impl Default for FactoryApp {
             progress: 42.0,
             active_tab: 0,
             button_selected: true,
+            toolbar_mode: true,
+            listview_selected: Some(2),
+            treeview_selected: Some(vec![0, 0, 1, 0]),
             last_action: "Ready. Click a control to inspect it.".to_owned(),
             widget_probe: "No control selected".to_owned(),
             catalog_scroll: 0.0,
@@ -370,29 +380,28 @@ impl FactoryApp {
     }
 
     fn toolbar(&mut self, ui: &mut Ui, p: Palette) {
-        ui.horizontal(|ui| {
-            ui.add_space(5.0);
-            if ClassicToolbarButton::new("Catalog")
-                .palette(p)
-                .show(ui, |painter, rect| draw_catalog_icon(painter, rect, p))
-                .clicked()
-            {
-                self.page = Page::Overview;
-                self.catalog_scroll = 0.0;
-                self.last_action = "Catalog opened".to_owned();
-            }
-            if ClassicToolbarButton::new("Reset samples")
-                .palette(p)
-                .show(ui, |painter, rect| draw_reset_icon(painter, rect, p))
-                .clicked()
-            {
-                self.reset_samples();
-            }
-            vertical_separator_with_palette(ui, &p);
-            ui.add_space(5.0);
-            ui.label(RichText::new("Control Gallery").small());
+        ClassicToolbar::new().palette(p).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ClassicToolbarButton::new("Catalog")
+                    .palette(p)
+                    .show(ui, |painter, rect| draw_catalog_icon(painter, rect, p))
+                    .clicked()
+                {
+                    self.page = Page::Overview;
+                    self.catalog_scroll = 0.0;
+                    self.last_action = "Catalog opened".to_owned();
+                }
+                if ClassicToolbarButton::new("Reset samples")
+                    .palette(p)
+                    .show(ui, |painter, rect| draw_reset_icon(painter, rect, p))
+                    .clicked()
+                {
+                    self.reset_samples();
+                }
+                vertical_separator_with_palette(ui, &p);
+                ui.label(RichText::new("Control Gallery").small());
+            });
         });
-        horizontal_separator_with_palette(ui, &p);
     }
 
     fn draw_navigation(&mut self, ui: &mut Ui, p: Palette) {
@@ -557,6 +566,7 @@ impl FactoryApp {
                 self.show_selection(ui, p);
                 self.show_ranges(ui, p);
                 self.show_containers(ui, p);
+                self.show_lists(ui, p);
                 self.show_palette(ui, p);
             }
             Page::Buttons => self.show_buttons(ui, p),
@@ -564,6 +574,7 @@ impl FactoryApp {
             Page::Selection => self.show_selection(ui, p),
             Page::Ranges => self.show_ranges(ui, p),
             Page::Containers => self.show_containers(ui, p),
+            Page::Lists => self.show_lists(ui, p),
             Page::Palette => self.show_palette(ui, p),
         }
     }
@@ -922,6 +933,120 @@ impl FactoryApp {
         });
     }
 
+    fn show_lists(&mut self, ui: &mut Ui, p: Palette) {
+        section(ui, p, "Toolbar", |ui| {
+            ui.label("Raised buttons represent commands; a selected mode stays pressed.");
+            ui.add_space(5.0);
+            ClassicToolbar::new().palette(p).show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let open = ClassicToolbarButton::new("Open selected item")
+                        .palette(p)
+                        .show(ui, |painter, rect| draw_catalog_icon(painter, rect, p));
+                    if open.clicked() {
+                        self.last_action = "Open selected item".to_owned();
+                    }
+                    self.observe("Open toolbar button", &open);
+
+                    let mode = ClassicToolbarButton::new("Selection mode")
+                        .palette(p)
+                        .selected(self.toolbar_mode)
+                        .show(ui, |painter, rect| draw_list_icon(painter, rect, p));
+                    if mode.clicked() {
+                        self.toolbar_mode = !self.toolbar_mode;
+                        self.last_action = if self.toolbar_mode {
+                            "Selection mode enabled".to_owned()
+                        } else {
+                            "Selection mode disabled".to_owned()
+                        };
+                    }
+                    self.observe("Selection mode toolbar button", &mode);
+
+                    vertical_separator_with_palette(ui, &p);
+                    let reset = ClassicToolbarButton::new("Reset samples")
+                        .palette(p)
+                        .show(ui, |painter, rect| draw_reset_icon(painter, rect, p));
+                    if reset.clicked() {
+                        self.reset_samples();
+                    }
+                    self.observe("Reset toolbar button", &reset);
+                    ui.label("View commands");
+                });
+            });
+        });
+
+        section(ui, p, "Report list view", |ui| {
+            ui.label("Choose a row with the mouse or use the arrow, Home, and End keys.");
+            ui.add_space(5.0);
+            let entries = [
+                ["Command.com", "MS-DOS Application", "93 KB", "08/24/95"],
+                ["Config.sys", "System Configuration", "1 KB", "08/24/95"],
+                ["Desktop.ini", "Configuration Settings", "1 KB", "09/14/95"],
+                ["Explorer.exe", "Application", "184 KB", "08/24/95"],
+                ["Himem.sys", "System File", "33 KB", "08/24/95"],
+                ["Readme.txt", "Text Document", "8 KB", "10/02/95"],
+                ["Win.com", "Application", "13 KB", "08/24/95"],
+                ["Win.ini", "Configuration Settings", "2 KB", "08/24/95"],
+                ["WinHelp.exe", "Application", "43 KB", "08/24/95"],
+                ["Winver.exe", "Application", "24 KB", "08/24/95"],
+            ];
+            let view = ClassicListView::new(
+                [
+                    ClassicListViewColumn::new("Name").width(164.0),
+                    ClassicListViewColumn::new("Type").width(184.0),
+                    ClassicListViewColumn::new("Size").width(72.0),
+                    ClassicListViewColumn::new("Modified"),
+                ],
+                entries,
+                &mut self.listview_selected,
+            )
+            .palette(p)
+            .id_salt("factory-report-list")
+            .max_height(160.0)
+            .show(ui);
+            if let Some(index) = view.clicked {
+                self.last_action = format!("Selected {}", entries[index][0]);
+            } else if view.changed {
+                if let Some(index) = view.selected {
+                    self.last_action = format!("Selected {}", entries[index][0]);
+                }
+            }
+            if let Some(index) = view.selected {
+                if let Some(response) = view.rows.get(index) {
+                    self.observe("Report row", response);
+                }
+                ui.add_space(3.0);
+                ui.label(format!("Selected item: {}", entries[index][0]));
+            }
+        });
+
+        section(ui, p, "Tree view", |ui| {
+            ui.label(
+                "Use plus/minus boxes to expand branches; arrow keys move through the outline.",
+            );
+            ui.add_space(5.0);
+            let nodes = sample_tree_nodes();
+            let tree = ClassicTreeView::new(nodes.clone(), &mut self.treeview_selected)
+                .palette(p)
+                .id_salt("factory-folder-tree")
+                .max_height(198.0)
+                .show(ui);
+            if let Some(path) = tree.clicked.as_deref() {
+                if let Some(label) = tree_node_label(&nodes, path) {
+                    self.last_action = format!("Selected folder {label}");
+                }
+            } else if tree.changed {
+                if let Some(path) = tree.selected.as_deref() {
+                    if let Some(label) = tree_node_label(&nodes, path) {
+                        self.last_action = format!("Selected folder {label}");
+                    }
+                }
+            }
+            if let Some(response) = tree.rows.iter().find(|response| response.has_focus()) {
+                self.observe("Tree row", response);
+            }
+        });
+    }
+
     fn show_palette(&mut self, ui: &mut Ui, p: Palette) {
         section(ui, p, "System palette", |ui| {
             ui.label("Change the color wells to see the theme update across the factory.");
@@ -1026,6 +1151,9 @@ impl FactoryApp {
         self.slider = 68.0;
         self.progress = 42.0;
         self.active_tab = 0;
+        self.toolbar_mode = true;
+        self.listview_selected = Some(2);
+        self.treeview_selected = Some(vec![0, 0, 1, 0]);
         self.theme.palette = Palette::default();
         self.catalog_scroll = 0.0;
         self.last_action = "Sample values reset".to_owned();
@@ -1089,6 +1217,70 @@ fn draw_reset_icon(painter: &egui::Painter, rect: Rect, palette: Palette) {
         palette.text,
         Stroke::NONE,
     ));
+}
+
+fn draw_list_icon(painter: &egui::Painter, rect: Rect, palette: Palette) {
+    let page = Rect::from_min_max(
+        rect.left_top() + vec2(1.0, 1.0),
+        rect.right_bottom() - vec2(1.0, 1.0),
+    );
+    painter.rect_filled(page, CornerRadius::ZERO, palette.input);
+    painter.rect_stroke(
+        page,
+        CornerRadius::ZERO,
+        Stroke::new(1.0, palette.text),
+        StrokeKind::Inside,
+    );
+    painter.rect_filled(
+        Rect::from_min_size(
+            page.left_top() + vec2(1.0, 3.0),
+            vec2(page.width() - 2.0, 3.0),
+        ),
+        CornerRadius::ZERO,
+        palette.selection,
+    );
+    for y in [page.top() + 2.0, page.top() + 8.0, page.top() + 11.0] {
+        painter.line_segment(
+            [pos2(page.left() + 2.0, y), pos2(page.right() - 2.0, y)],
+            Stroke::new(1.0, palette.shadow),
+        );
+    }
+}
+
+fn sample_tree_nodes() -> Vec<ClassicTreeNode> {
+    vec![
+        ClassicTreeNode::new("Desktop").expanded(true).children([
+            ClassicTreeNode::new("My Computer")
+                .expanded(true)
+                .children([
+                    ClassicTreeNode::new("3½ Floppy (A:)"),
+                    ClassicTreeNode::new("Local Disk (C:)")
+                        .expanded(true)
+                        .children([
+                            ClassicTreeNode::new("Windows").expanded(true).children([
+                                ClassicTreeNode::new("System"),
+                                ClassicTreeNode::new("Fonts"),
+                                ClassicTreeNode::new("Help"),
+                            ]),
+                            ClassicTreeNode::new("Program Files"),
+                        ]),
+                    ClassicTreeNode::new("Data (D:)"),
+                ]),
+            ClassicTreeNode::new("Network Neighborhood"),
+            ClassicTreeNode::new("Recycle Bin"),
+        ]),
+    ]
+}
+
+fn tree_node_label<'a>(nodes: &'a [ClassicTreeNode], path: &[usize]) -> Option<&'a str> {
+    let mut siblings = nodes;
+    let mut selected = None;
+    for index in path {
+        let node = siblings.get(*index)?;
+        selected = Some(node.label());
+        siblings = node.child_nodes();
+    }
+    selected
 }
 
 #[derive(Clone, Copy)]

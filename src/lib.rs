@@ -23,9 +23,12 @@ mod bevel;
 mod chrome;
 mod controls;
 mod listbox;
+mod listview;
 mod menu;
 mod palette;
 mod theme;
+mod toolbar;
+mod treeview;
 mod widgets;
 
 pub use bevel::{Bevel, paint_bevel};
@@ -39,12 +42,15 @@ pub use controls::{
     ClassicTabsResponse, ScrollButtonDirection,
 };
 pub use listbox::{ClassicListBox, ClassicListBoxResponse};
+pub use listview::{ClassicListView, ClassicListViewColumn, ClassicListViewResponse};
 pub use menu::{
     ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator, ClassicToolbarButton,
     classic_menu_style, classic_popup_style, vertical_separator, vertical_separator_with_palette,
 };
 pub use palette::Palette;
 pub use theme::Classic95;
+pub use toolbar::ClassicToolbar;
+pub use treeview::{ClassicTreeNode, ClassicTreeView, ClassicTreeViewResponse};
 pub use widgets::{
     BevelFrame, ClassicButton, horizontal_separator, horizontal_separator_with_palette,
 };

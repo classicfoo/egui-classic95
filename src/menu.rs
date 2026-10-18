@@ -285,6 +285,8 @@ pub struct ClassicToolbarButton {
     label: String,
     palette: Option<Palette>,
     size: Vec2,
+    selected: bool,
+    enabled: bool,
 }
 
 impl ClassicToolbarButton {
@@ -293,7 +295,9 @@ impl ClassicToolbarButton {
         Self {
             label: label.into(),
             palette: None,
-            size: vec2(26.0, 24.0),
+            size: vec2(24.0, 22.0),
+            selected: false,
+            enabled: true,
         }
     }
 
@@ -309,27 +313,46 @@ impl ClassicToolbarButton {
         self
     }
 
+    /// Display the pressed option-set appearance for a toolbar mode button.
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+
+    /// Enable or disable interaction with the toolbar button.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
     /// Show the button and let the application paint its own icon.
     pub fn show(self, ui: &mut Ui, draw_icon: impl FnOnce(&Painter, Rect)) -> Response {
         let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
-        let (rect, response) = ui.allocate_exact_size(self.size, Sense::click());
+        let sense = if self.enabled {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let (rect, response) = ui.allocate_exact_size(self.size, sense);
         ui.painter()
             .rect_filled(rect, CornerRadius::ZERO, palette.face);
-        paint_bevel(
-            ui.painter(),
-            rect,
-            if response.is_pointer_button_down_on() {
-                Bevel::Pressed
-            } else {
-                Bevel::Raised
-            },
-            &palette,
-        );
-        let icon_rect = Rect::from_center_size(rect.center(), vec2(16.0, 16.0));
+        if response.is_pointer_button_down_on() || self.selected {
+            paint_bevel(ui.painter(), rect, Bevel::Pressed, &palette);
+        } else {
+            paint_bevel(ui.painter(), rect, Bevel::Raised, &palette);
+        }
+        let icon_size = if self.size.x >= 32.0 && self.size.y >= 30.0 {
+            24.0
+        } else {
+            16.0
+        };
+        let icon_rect = Rect::from_center_size(rect.center(), vec2(icon_size, icon_size));
         draw_icon(ui.painter(), icon_rect);
-        response
-            .on_hover_text(self.label.clone())
-            .on_disabled_hover_text(self.label)
+        if self.enabled {
+            response.on_hover_text(self.label)
+        } else {
+            response.on_disabled_hover_text(self.label)
+        }
     }
 }
 
