@@ -1159,23 +1159,28 @@ fn section(ui: &mut Ui, palette: Palette, title: &str, add_contents: impl FnOnce
     let inner = egui::Frame::new()
         .fill(palette.face)
         .stroke(Stroke::NONE)
-        .inner_margin(Margin::symmetric(8, 3))
+        .inner_margin(Margin {
+            left: 10,
+            right: 10,
+            top: 3,
+            bottom: 10,
+        })
         .show(ui, |ui| {
-            ui.set_min_width((available_width - 16.0).max(1.0));
+            ui.set_min_width((available_width - 20.0).max(1.0));
             let heading = ui.label(RichText::new(title).strong());
             ui.add_space(5.0);
             add_contents(ui);
             heading.rect
         });
     paint_group_box(ui, inner.response.rect, inner.inner, palette);
-    ui.add_space(9.0);
+    ui.add_space(3.0);
 }
 
 fn paint_group_box(ui: &Ui, rect: Rect, heading: Rect, palette: Palette) {
     let painter = ui.painter();
     let top = heading.center().y;
-    let left_gap = (heading.left() - 4.0).max(rect.left() + 8.0);
-    let right_gap = (heading.right() + 4.0).min(rect.right() - 8.0);
+    let left_gap = (heading.left() - 4.0).max(rect.left() + 4.0);
+    let right_gap = (heading.right() + 4.0).min(rect.right() - 4.0);
 
     // The heading interrupts the top edge just as it does on a Win95 dialog.
     for (start, end) in [(rect.left(), left_gap), (right_gap, rect.right())] {
