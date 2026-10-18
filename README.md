@@ -4,6 +4,8 @@ A small reusable theme engine for building Windows 95-inspired interfaces with [
 
 The **Widget Factory** is the project centerpiece: a runnable control gallery with editable fields, live buttons, selection controls, sliders, progress, containers, palette editing, and an interaction inspector.
 
+The theme bundles [WIN95FA by Alina Sava](https://fontsource.org/fonts/win95fa), an open-licensed revival of the Windows 95 MS Sans Serif look. `Classic95::install` uses it for proportional text while retaining egui's default fonts as fallbacks. Its SIL Open Font License is included at `assets/fonts/WIN95FA-OFL.txt`.
+
 ## Run the Widget Factory
 
 ```sh

@@ -1,7 +1,7 @@
 use egui::style::HandleShape;
 use egui::{
-    Color32, Context, CornerRadius, FontId, Id, Margin, Shadow, Stroke, Style, TextStyle, Theme,
-    vec2,
+    Color32, Context, CornerRadius, FontData, FontFamily, FontId, FontInsert, FontPriority, Id,
+    InsertFontFamily, Margin, Shadow, Stroke, Style, TextStyle, Theme, vec2,
 };
 
 use crate::Palette;
@@ -98,9 +98,19 @@ impl Classic95 {
     /// Install the theme for the current egui context.
     ///
     /// This selects egui's light theme and also updates the style used by new
-    /// menus and popups. Call it during setup, or again after changing the
-    /// palette.
+    /// menus and popups. It also installs the bundled WIN95FA font as the
+    /// proportional font, keeping egui's fonts available as fallbacks. Call it
+    /// during setup, or again after changing the palette.
     pub fn install(&self, ctx: &Context) {
+        ctx.add_font(FontInsert::new(
+            "egui-classic95-win95fa",
+            FontData::from_static(include_bytes!("../assets/fonts/WIN95FA.otf")),
+            vec![InsertFontFamily {
+                family: FontFamily::Proportional,
+                priority: FontPriority::Highest,
+            }],
+        ));
+
         let style = self.style();
         ctx.data_mut(|data| {
             data.insert_temp(Id::unique("egui-classic95-palette"), self.palette);
