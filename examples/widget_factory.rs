@@ -9,11 +9,11 @@ use egui::{
 };
 use egui_classic95::{
     Bevel, BevelFrame, Classic95, ClassicButton, ClassicCheckbox, ClassicComboArrow,
-    ClassicGroupBox, ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator,
-    ClassicProgressBar, ClassicRadioButton, ClassicScrollBar, ClassicSlider, ClassicStatusBar,
-    ClassicSystemMenu, ClassicTabs, ClassicTitleBar, ClassicToolbarButton, ClassicWindowFrame,
-    Palette, classic_popup_style, horizontal_separator_with_palette, paint_bevel,
-    vertical_separator_with_palette,
+    ClassicGroupBox, ClassicListBox, ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup,
+    ClassicMenuSeparator, ClassicProgressBar, ClassicRadioButton, ClassicScrollBar, ClassicSlider,
+    ClassicStatusBar, ClassicSystemMenu, ClassicTabs, ClassicTitleBar, ClassicToolbarButton,
+    ClassicWindowFrame, Palette, classic_popup_style, horizontal_separator_with_palette,
+    paint_bevel, vertical_separator_with_palette,
 };
 use std::{cell::Cell, rc::Rc};
 
@@ -399,28 +399,19 @@ impl FactoryApp {
         ui.set_min_width(ui.available_width());
         ui.label(RichText::new("Controls").strong());
         ui.add_space(3.0);
-        BevelFrame::sunken()
-            .palette(p)
-            .fill(p.input)
-            .inner_margin(Margin::same(1))
-            .show(ui, |ui| {
-                ui.set_min_width(ui.available_width());
-                for page in Page::ALL {
-                    // Stretch each selectable row so its highlight fills the list width.
-                    let response = ui.add(
-                        egui::Button::selectable(
-                            self.page == page,
-                            (page.label(), egui::Atom::grow()),
-                        )
-                        .min_size(vec2(ui.available_width(), 0.0)),
-                    );
-                    if response.clicked() {
-                        self.page = page;
-                        self.last_action = format!("Opened {}", page.label());
-                        self.catalog_scroll = 0.0;
-                    }
-                }
-            });
+        let mut selected_page = self.page.index();
+        let list = ClassicListBox::new(
+            Page::ALL.iter().map(|page| page.label()),
+            &mut selected_page,
+        )
+        .palette(p)
+        .id_salt("factory-page-list")
+        .show(ui);
+        if let Some(index) = list.clicked {
+            self.page = Page::ALL[index];
+            self.last_action = format!("Opened {}", self.page.label());
+            self.catalog_scroll = 0.0;
+        }
         ui.add_space(8.0);
         ui.label(RichText::new("Classic edges").strong());
         edge_legend(ui, p, "Button", LegendStyle::Raised);

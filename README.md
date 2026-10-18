@@ -26,7 +26,7 @@ Install the theme once during startup, then compose the reusable controls and wi
 
 ```rust
 use egui_classic95::{
-    BevelFrame, Classic95, ClassicButton, ClassicMenuBar, ClassicMenuItem,
+    BevelFrame, Classic95, ClassicButton, ClassicListBox, ClassicMenuBar, ClassicMenuItem,
     ClassicMenuPopup, ClassicSystemMenu, ClassicTitleBar, ClassicWindowFrame,
 };
 
@@ -63,6 +63,18 @@ fn app_window(ui: &mut egui::Ui, show_toolbar: &mut bool) {
 }
 ```
 
+Keep the selected list index in app state to use the reusable list box:
+
+```rust
+let list = ClassicListBox::new(["General", "Details", "Advanced"], &mut self.selected_page)
+    .id_salt("property-pages")
+    .max_height(160.0)
+    .show(ui);
+if let Some(index) = list.clicked {
+    // Respond to the user's selection.
+}
+```
+
 The title, icon, menu labels, menu actions, and page contents remain application-owned. Caption button responses are returned from `ClassicTitleBar::show`; the application sends the matching viewport commands or uses them for its own window actions.
 
 `ClassicButton`, `BevelFrame`, and `horizontal_separator` read the palette installed in the egui context. Pass `.palette(my_palette)` to a component when you want a local override.
@@ -78,6 +90,7 @@ The title, icon, menu labels, menu actions, and page contents remain application
 - `ClassicWindowFrame`, `ClassicTitleBar`, and `CaptionButton` provide the raised clipped window frame and pixel-drawn title controls.
 - `ClassicSystemMenu`, `ClassicMenuBar`, `ClassicMenuPopup`, `ClassicMenuItem`, and `ClassicMenuSeparator` supply classic menu styling while leaving menu content to the application.
 - `ClassicGroupBox` and `ClassicTabs` provide the classic labeled group and raised tabbed panel.
+- `ClassicListBox` provides a recessed list with full-width selectable rows and optional scrolling.
 - `ClassicCheckbox`, `ClassicRadioButton`, `ClassicSlider`, `ClassicProgressBar`, `ClassicComboArrow`, `ClassicToolbarButton`, `ClassicScrollButton`, and `ClassicStatusBar` provide reusable control visuals.
 
 Text editing, combo boxes, and collapsible groups remain egui controls, so their editing and keyboard behavior stays native. `ClassicCheckbox`, `ClassicRadioButton`, and `ClassicSlider` keep egui's interaction behavior while drawing the classic visuals; `ClassicTabs` provides a reusable classic tab row and panel.

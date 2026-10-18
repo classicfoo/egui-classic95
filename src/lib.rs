@@ -22,6 +22,7 @@
 mod bevel;
 mod chrome;
 mod controls;
+mod listbox;
 mod menu;
 mod palette;
 mod theme;
@@ -37,6 +38,7 @@ pub use controls::{
     ClassicScrollBar, ClassicScrollButton, ClassicSlider, ClassicStatusBar, ClassicTabs,
     ClassicTabsResponse, ScrollButtonDirection,
 };
+pub use listbox::{ClassicListBox, ClassicListBoxResponse};
 pub use menu::{
     ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator, ClassicToolbarButton,
     classic_menu_style, classic_popup_style, vertical_separator, vertical_separator_with_palette,
