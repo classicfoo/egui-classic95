@@ -821,6 +821,8 @@ impl FactoryApp {
                     .fill(p.input)
                     .inner_margin(Margin::same(1))
                     .show(ui, |ui| {
+                        // Figure 7.20's ~17 px arrow on a 121 px field scales to ~22 px here.
+                        ui.spacing_mut().icon_width = 22.0;
                         ui.visuals_mut().button_frame = false;
                         egui::ComboBox::from_id_salt("factory-display-mode")
                             .selected_text(self.combo_choice.clone())
@@ -1585,7 +1587,7 @@ fn draw_combo_arrow(ui: &Ui, rect: Rect, palette: Palette, pressed: bool) {
         .rect_filled(rect, CornerRadius::ZERO, palette.face);
     paint_bevel(
         ui.painter(),
-        rect.shrink(1.0),
+        rect,
         if pressed {
             Bevel::Pressed
         } else {
