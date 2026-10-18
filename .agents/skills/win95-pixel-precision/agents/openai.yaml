@@ -1,0 +1,3 @@
+interface:
+  display_name: "Win95 Pixel Precision"
+  short_description: "Compare Win95 controls pixel by pixel"
