@@ -35,7 +35,7 @@ mod widgets;
 pub use bevel::{Bevel, paint_bevel};
 pub use chrome::{
     CaptionButton, CaptionButtonKind, ClassicSystemMenu, ClassicTitleBar, ClassicTitleBarResponse,
-    ClassicWindowFrame,
+    ClassicWindow, ClassicWindowFrame,
 };
 pub use controls::{
     ClassicCheckbox, ClassicComboArrow, ClassicComboBox, ClassicGroupBox, ClassicProgressBar,

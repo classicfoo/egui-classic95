@@ -11,10 +11,10 @@ use egui_classic95::{
     Bevel, BevelFrame, Classic95, ClassicButton, ClassicCheckbox, ClassicComboBox, ClassicGroupBox,
     ClassicListBox, ClassicListView, ClassicListViewColumn, ClassicMenuBar, ClassicMenuItem,
     ClassicMenuPopup, ClassicMenuSeparator, ClassicProgressBar, ClassicRadioButton,
-    ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicSystemMenu, ClassicTabs,
-    ClassicTextEdit, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton, ClassicTooltip,
-    ClassicTreeNode, ClassicTreeView, ClassicWindowFrame, Palette,
-    horizontal_separator_with_palette, paint_bevel, vertical_separator_with_palette,
+    ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicTabs, ClassicTextEdit,
+    ClassicToolbar, ClassicToolbarButton, ClassicTooltip, ClassicTreeNode, ClassicTreeView,
+    ClassicWindow, Palette, horizontal_separator_with_palette, paint_bevel,
+    vertical_separator_with_palette,
 };
 
 fn main() -> eframe::Result {
@@ -156,12 +156,13 @@ impl eframe::App for FactoryApp {
         }
 
         let full_rect = ui.max_rect();
-        ClassicWindowFrame::new()
+        let layout_width = ui.available_width();
+        ClassicWindow::new("Widget Factory")
             .palette(self.theme.palette)
             .fill(self.theme.palette.face)
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-                self.draw_window(ui, ui.available_width());
+            .id(Id::unique("widget-factory-window"))
+            .show(ui, draw_app_icon, |ui| {
+                self.draw_window(ui, layout_width);
             });
         self.resize_handles(ui, full_rect);
     }
@@ -172,7 +173,6 @@ impl FactoryApp {
         let p = self.theme.palette;
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-            self.title_bar(ui, p);
             self.menu_bar(ui);
             if self.show_toolbar {
                 self.toolbar(ui, p);
@@ -218,57 +218,6 @@ impl FactoryApp {
                 self.status_bar(ui, p);
             }
         });
-    }
-
-    fn title_bar(&mut self, ui: &mut Ui, p: Palette) {
-        let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
-        let title_bar = ClassicTitleBar::new("Widget Factory")
-            .palette(p)
-            .maximized(maximized)
-            .id(Id::unique("widget-factory-title-bar"))
-            .show(ui, draw_app_icon);
-
-        ClassicSystemMenu::new(&title_bar.system_menu)
-            .palette(p)
-            .show(|ui| {
-                if ui
-                    .add_enabled(maximized, ClassicMenuItem::button("Restore").palette(p))
-                    .clicked()
-                {
-                    ui.ctx()
-                        .send_viewport_cmd(ViewportCommand::Maximized(false));
-                }
-                if ui
-                    .add(ClassicMenuItem::button("Minimize").palette(p))
-                    .clicked()
-                {
-                    ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
-                }
-                if ui
-                    .add_enabled(!maximized, ClassicMenuItem::button("Maximize").palette(p))
-                    .clicked()
-                {
-                    ui.ctx().send_viewport_cmd(ViewportCommand::Maximized(true));
-                }
-                ui.add(ClassicMenuSeparator::new().palette(p));
-                if ui
-                    .add(ClassicMenuItem::button("Close").palette(p))
-                    .clicked()
-                {
-                    ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-                }
-            });
-
-        if title_bar.minimize.as_ref().is_some_and(Response::clicked) {
-            ui.ctx().send_viewport_cmd(ViewportCommand::Minimized(true));
-        }
-        if title_bar.maximize.as_ref().is_some_and(Response::clicked) {
-            ui.ctx()
-                .send_viewport_cmd(ViewportCommand::Maximized(!maximized));
-        }
-        if title_bar.close.as_ref().is_some_and(Response::clicked) {
-            ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-        }
     }
 
     fn menu_bar(&mut self, ui: &mut Ui) {

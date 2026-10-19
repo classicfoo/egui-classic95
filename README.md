@@ -18,9 +18,10 @@ cargo run --example widget_factory
 [dependencies]
 egui = "0.37"
 egui-classic95 = "0.1"
+eframe = "0.37" # needed when using eframe
 ```
 
-Installing `Classic95` sets egui's theme, palette, font preferences, and standard widget styling. It does not draw a custom window frame, title bar, or menus; applications add those explicitly with the public chrome components.
+Installing `Classic95` sets egui's theme, palette, font preferences, and standard widget styling. `ClassicWindow` draws the classic frame and title bar, supports dragging and the standard window controls, and provides the standard system-menu actions. Apps supply the title, icon, client contents, and any app-specific system-menu items.
 
 Install the theme once during startup, then compose the reusable controls and window chrome:
 
@@ -28,40 +29,50 @@ Install the theme once during startup, then compose the reusable controls and wi
 use egui_classic95::{
     BevelFrame, Classic95, ClassicButton, ClassicListBox, ClassicListView,
     ClassicListViewColumn, ClassicMenuBar, ClassicMenuItem, ClassicMenuPopup,
-    ClassicSystemMenu, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton,
-    ClassicTooltip, ClassicTreeNode, ClassicTreeView, ClassicWindowFrame,
+    ClassicWindow, ClassicToolbar, ClassicToolbarButton,
+    ClassicTooltip, ClassicTreeNode, ClassicTreeView,
 };
 
 fn setup(ctx: &egui::Context) {
     Classic95::default().install(ctx);
 }
 
+// eframe apps disable native decorations because ClassicWindow draws them.
+fn native_options() -> eframe::NativeOptions {
+    eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_decorations(false),
+        ..Default::default()
+    }
+}
+
 fn app_window(ui: &mut egui::Ui, show_toolbar: &mut bool) {
-    ClassicWindowFrame::new().show(ui, |ui| {
-        let title = ClassicTitleBar::new("My application").show(ui, |_painter, _icon_rect| {
+    ClassicWindow::new("My application").show_with_system_menu(
+        ui,
+        |_painter, _icon_rect| {
             // Draw an application-specific icon here.
-        });
-        ClassicSystemMenu::new(&title.system_menu).show(|ui| {
-            if ui.button("About").clicked() {
+        },
+        |ui| {
+            if ui.add(ClassicMenuItem::button("About")).clicked() {
                 // Run an application-specific action.
             }
-        });
-
-        ClassicMenuBar::new().show(ui, |ui| {
-            ui.menu_button("View", |ui| {
-                ClassicMenuPopup::new().show(ui, |ui| {
-                    ui.add(ClassicMenuItem::check("Show toolbar", show_toolbar));
+        },
+        |ui| {
+            ClassicMenuBar::new().show(ui, |ui| {
+                ui.menu_button("View", |ui| {
+                    ClassicMenuPopup::new().show(ui, |ui| {
+                        ui.add(ClassicMenuItem::check("Show toolbar", show_toolbar));
+                    });
                 });
             });
-        });
 
-        if ui.add(ClassicButton::new("Apply")).clicked() {
-            // Apply changes.
-        }
-        BevelFrame::sunken().show(ui, |ui| {
-            ui.label("A recessed content well");
-        });
-    });
+            if ui.add(ClassicButton::new("Apply")).clicked() {
+                // Apply changes.
+            }
+            BevelFrame::sunken().show(ui, |ui| {
+                ui.label("A recessed content well");
+            });
+        },
+    );
 }
 ```
 

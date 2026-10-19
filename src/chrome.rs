@@ -4,7 +4,7 @@ use egui::{
     UiBuilder, Widget, pos2, vec2,
 };
 
-use crate::menu::{ClassicMenuPopup, classic_popup_style};
+use crate::menu::{ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator, classic_popup_style};
 use crate::theme::palette_for;
 use crate::{Bevel, Palette, paint_bevel};
 
@@ -355,6 +355,185 @@ impl<'a> ClassicSystemMenu<'a> {
                     .palette(palette)
                     .show(ui, add_contents)
             })
+    }
+}
+
+/// A complete classic application window, including its frame and title bar.
+///
+/// The component handles dragging, minimize, maximize/restore, close, and the
+/// standard system-menu actions. The application provides its icon and client
+/// contents. Native applications should disable platform decorations in their
+/// startup options (for example, `ViewportBuilder::with_decorations(false)`).
+#[derive(Clone, Debug)]
+pub struct ClassicWindow {
+    title: String,
+    palette: Option<Palette>,
+    fill: Option<Color32>,
+    content_inset: f32,
+    id: Option<Id>,
+}
+
+impl ClassicWindow {
+    /// Create a window with the supplied title.
+    pub fn new(title: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            palette: None,
+            fill: None,
+            content_inset: 3.0,
+            id: None,
+        }
+    }
+
+    /// Use a local palette instead of the one installed in the egui context.
+    pub fn palette(mut self, palette: Palette) -> Self {
+        self.palette = Some(palette);
+        self
+    }
+
+    /// Set the color behind the window contents.
+    pub fn fill(mut self, fill: Color32) -> Self {
+        self.fill = Some(fill);
+        self
+    }
+
+    /// Set the gap between the raised frame and the clipped client area.
+    pub fn content_inset(mut self, inset: f32) -> Self {
+        self.content_inset = inset.max(0.0);
+        self
+    }
+
+    /// Set a stable identifier when the UI contains multiple windows with the same title.
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    /// Draw the window and its standard system menu, then show application contents.
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        draw_icon: impl FnOnce(&Painter, Rect),
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        self.show_impl(ui, draw_icon, false, |_| {}, add_contents)
+    }
+
+    /// Draw the window and its system menu with application-specific menu items.
+    ///
+    /// The application items appear after Restore, Minimize, and Maximize, and
+    /// before the standard Close item.
+    pub fn show_with_system_menu<R>(
+        self,
+        ui: &mut Ui,
+        draw_icon: impl FnOnce(&Painter, Rect),
+        add_system_menu_items: impl FnOnce(&mut Ui),
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        self.show_impl(ui, draw_icon, true, add_system_menu_items, add_contents)
+    }
+
+    fn show_impl<R>(
+        self,
+        ui: &mut Ui,
+        draw_icon: impl FnOnce(&Painter, Rect),
+        has_custom_system_menu: bool,
+        add_system_menu_items: impl FnOnce(&mut Ui),
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
+        let maximized = ui.input(|input| input.viewport().maximized.unwrap_or(false));
+        let active = ui.input(|input| input.viewport().focused.unwrap_or(true));
+        let id = self
+            .id
+            .unwrap_or_else(|| ui.make_persistent_id(("classic95-window", self.title.as_str())));
+
+        ClassicWindowFrame::new()
+            .palette(palette)
+            .fill(self.fill.unwrap_or(palette.face))
+            .content_inset(self.content_inset)
+            .show(ui, |ui| {
+                ui.vertical(|ui| {
+                    let content_spacing = ui.spacing().item_spacing;
+                    ui.spacing_mut().item_spacing.y = 0.0;
+
+                    let title_bar = ClassicTitleBar::new(self.title)
+                        .palette(palette)
+                        .active(active)
+                        .maximized(maximized)
+                        .id(id.with("title-bar"))
+                        .show(ui, draw_icon);
+
+                    ClassicSystemMenu::new(&title_bar.system_menu)
+                        .palette(palette)
+                        .show(|ui| {
+                            if ui
+                                .add_enabled(
+                                    maximized,
+                                    ClassicMenuItem::button("Restore").palette(palette),
+                                )
+                                .clicked()
+                            {
+                                ui.ctx()
+                                    .send_viewport_cmd(egui::ViewportCommand::Maximized(false));
+                            }
+                            if ui
+                                .add(ClassicMenuItem::button("Minimize").palette(palette))
+                                .clicked()
+                            {
+                                ui.ctx()
+                                    .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                            }
+                            if ui
+                                .add_enabled(
+                                    !maximized,
+                                    ClassicMenuItem::button("Maximize").palette(palette),
+                                )
+                                .clicked()
+                            {
+                                ui.ctx()
+                                    .send_viewport_cmd(egui::ViewportCommand::Maximized(true));
+                            }
+
+                            ui.add(ClassicMenuSeparator::new().palette(palette));
+                            if has_custom_system_menu {
+                                add_system_menu_items(ui);
+                                ui.add(ClassicMenuSeparator::new().palette(palette));
+                            }
+                            if ui
+                                .add(ClassicMenuItem::button("Close").palette(palette))
+                                .clicked()
+                            {
+                                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                        });
+
+                    if title_bar.minimize.as_ref().is_some_and(Response::clicked) {
+                        ui.ctx()
+                            .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
+                    if title_bar.maximize.as_ref().is_some_and(Response::clicked) {
+                        ui.ctx()
+                            .send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
+                    }
+                    if title_bar.close.as_ref().is_some_and(Response::clicked) {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing = content_spacing;
+                        add_contents(ui)
+                    })
+                    .inner
+                })
+                .inner
+            })
+    }
+}
+
+impl Default for ClassicWindow {
+    fn default() -> Self {
+        Self::new("")
     }
 }
 
