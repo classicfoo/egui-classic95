@@ -957,8 +957,7 @@ impl<'a> ClassicScrollBar<'a> {
 
 fn paint_scrollbar_bevel(painter: &Painter, rect: Rect, bevel: Bevel, palette: &Palette) {
     painter.rect_filled(rect, CornerRadius::ZERO, palette.face);
-    let highlight_rect = Rect::from_min_max((rect.min + vec2(1.0, 1.0)).min(rect.max), rect.max);
-    paint_bevel(painter, highlight_rect, bevel, palette);
+    paint_bevel(painter, rect, bevel, palette);
 }
 
 /// A classic status strip with an inset border and pixel-drawn resize grip.
