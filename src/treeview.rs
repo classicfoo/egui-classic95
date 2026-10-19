@@ -265,7 +265,6 @@ impl<'a> ClassicTreeView<'a> {
                                             !item.node.children.is_empty(),
                                             expander_center,
                                             label_x,
-                                            palette,
                                         );
 
                                         if !item.node.children.is_empty() {
@@ -521,7 +520,6 @@ struct VisibleNode<'a> {
 
 const TREE_INDENT: f32 = 16.0;
 const TREE_EXPANDER_SIZE: f32 = 9.0;
-const TREE_CONNECTOR_DOT_SIZE: f32 = 1.0;
 
 fn collect_initially_expanded(
     nodes: &[ClassicTreeNode],
@@ -615,10 +613,9 @@ fn paint_connectors(
     has_children: bool,
     current_center: egui::Pos2,
     label_x: f32,
-    palette: Palette,
 ) {
     let painter = ui.painter();
-    let connector_color = palette.shadow;
+    let connector_color = egui::Color32::BLACK;
     for (level, continues) in ancestors_continue.iter().enumerate() {
         let x = row_rect.left() + 4.0 + level as f32 * TREE_INDENT + TREE_EXPANDER_SIZE * 0.5;
         let top = if level + 1 == depth && is_first {
@@ -626,9 +623,9 @@ fn paint_connectors(
         } else {
             row_rect.top()
         };
-        dotted_vertical(painter, x, top, row_rect.center().y, connector_color);
+        solid_vertical(painter, x, top, row_rect.center().y, connector_color);
         if *continues {
-            dotted_vertical(
+            solid_vertical(
                 painter,
                 x,
                 row_rect.center().y,
@@ -647,7 +644,7 @@ fn paint_connectors(
     } else {
         label_x - 2.0
     };
-    dotted_horizontal(
+    solid_horizontal(
         painter,
         parent_x,
         end_x,
@@ -656,44 +653,24 @@ fn paint_connectors(
     );
 }
 
-fn dotted_vertical(painter: &egui::Painter, x: f32, top: f32, bottom: f32, color: egui::Color32) {
-    let mut dots = egui::Mesh::default();
+fn solid_vertical(painter: &egui::Painter, x: f32, top: f32, bottom: f32, color: egui::Color32) {
     let x = x.round();
-    let mut y = top.ceil();
-    while y < bottom {
-        dots.add_colored_rect(
-            Rect::from_min_size(
-                pos2(x, y),
-                vec2(TREE_CONNECTOR_DOT_SIZE, TREE_CONNECTOR_DOT_SIZE),
-            ),
-            color,
-        );
-        y += 2.0;
-    }
-    if !dots.vertices.is_empty() {
-        painter.add(egui::Shape::mesh(dots));
-    }
+    painter.rect_filled(
+        Rect::from_min_max(pos2(x, top.floor()), pos2(x + 1.0, bottom.ceil())),
+        CornerRadius::ZERO,
+        color,
+    );
 }
 
-fn dotted_horizontal(painter: &egui::Painter, left: f32, right: f32, y: f32, color: egui::Color32) {
+fn solid_horizontal(painter: &egui::Painter, left: f32, right: f32, y: f32, color: egui::Color32) {
     let y = y.round();
     let painter = painter.with_clip_rect(Rect::from_min_max(
         pos2(left, y - 1.0),
         pos2(right, y + 2.0),
     ));
-    let mut dots = egui::Mesh::default();
-    let mut x = left.ceil();
-    while x < right {
-        dots.add_colored_rect(
-            Rect::from_min_size(
-                pos2(x, y),
-                vec2(TREE_CONNECTOR_DOT_SIZE, TREE_CONNECTOR_DOT_SIZE),
-            ),
-            color,
-        );
-        x += 2.0;
-    }
-    if !dots.vertices.is_empty() {
-        painter.add(egui::Shape::mesh(dots));
-    }
+    painter.rect_filled(
+        Rect::from_min_max(pos2(left.floor(), y), pos2(right.ceil(), y + 1.0)),
+        CornerRadius::ZERO,
+        color,
+    );
 }
