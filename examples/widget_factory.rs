@@ -433,9 +433,10 @@ impl FactoryApp {
     fn draw_catalog(&mut self, ui: &mut Ui, p: Palette) {
         let region = ui.available_size();
         let bar_width = 16.0;
-        let viewport_width = (region.x - bar_width).max(1.0);
+        let scrollbar_gap = 6.0;
+        let viewport_width = (region.x - bar_width - scrollbar_gap).max(1.0);
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.spacing_mut().item_spacing.x = scrollbar_gap;
             let scroll = ui.allocate_ui_with_layout(
                 vec2(viewport_width, region.y),
                 Layout::top_down(Align::Min),
