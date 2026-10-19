@@ -31,7 +31,11 @@ impl ClassicMenuBar {
         let popup_style = move |style: &mut Style| classic_menu_style(style, palette);
         egui::MenuBar::new()
             .style(bar_style)
-            .config(egui::menu::MenuConfig::new().style(popup_style))
+            .config(
+                egui::menu::MenuConfig::new()
+                    .style(popup_style)
+                    .submenu_gap(0.0),
+            )
             .ui(ui, add_contents)
     }
 }
