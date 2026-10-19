@@ -76,6 +76,7 @@ fn set_menu_selection(style: &mut Style, palette: Palette) {
 pub struct ClassicMenuPopup {
     palette: Option<Palette>,
     min_width: f32,
+    max_width: f32,
 }
 
 impl ClassicMenuPopup {
@@ -84,6 +85,7 @@ impl ClassicMenuPopup {
         Self {
             palette: None,
             min_width: 190.0,
+            max_width: 190.0,
         }
     }
 
@@ -96,6 +98,13 @@ impl ClassicMenuPopup {
     /// Set the minimum width of the popup contents.
     pub fn min_width(mut self, width: f32) -> Self {
         self.min_width = width.max(0.0);
+        self.max_width = self.max_width.max(self.min_width);
+        self
+    }
+
+    /// Set the maximum width of the popup contents.
+    pub fn max_width(mut self, width: f32) -> Self {
+        self.max_width = width.max(self.min_width);
         self
     }
 
@@ -103,6 +112,7 @@ impl ClassicMenuPopup {
     pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
         let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
         ui.set_min_width(self.min_width);
+        ui.set_max_width(self.max_width);
         ui.spacing_mut().item_spacing.y = 0.0;
         let result = add_contents(ui);
         paint_popup_bevel(ui, palette);
