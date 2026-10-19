@@ -38,9 +38,9 @@ pub use chrome::{
     ClassicWindowFrame,
 };
 pub use controls::{
-    ClassicCheckbox, ClassicComboArrow, ClassicGroupBox, ClassicProgressBar, ClassicRadioButton,
-    ClassicScrollBar, ClassicScrollButton, ClassicSlider, ClassicStatusBar, ClassicTabs,
-    ClassicTabsResponse, ScrollButtonDirection,
+    ClassicCheckbox, ClassicComboArrow, ClassicComboBox, ClassicGroupBox, ClassicProgressBar,
+    ClassicRadioButton, ClassicScrollBar, ClassicScrollButton, ClassicSlider, ClassicStatusBar,
+    ClassicTabs, ClassicTabsResponse, ClassicTextEdit, ScrollButtonDirection,
 };
 pub use listbox::{ClassicListBox, ClassicListBoxResponse};
 pub use listview::{ClassicListView, ClassicListViewColumn, ClassicListViewResponse};

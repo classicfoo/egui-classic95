@@ -4,9 +4,69 @@ use egui::{
     RichText, Sense, Stroke, Ui, UiBuilder, Vec2, Widget, pos2, vec2,
 };
 use std::ops::RangeInclusive;
+use std::{cell::Cell, rc::Rc};
 
 use crate::theme::palette_for;
-use crate::{Bevel, BevelFrame, Palette, paint_bevel};
+use crate::{Bevel, BevelFrame, Palette, classic_popup_style, paint_bevel};
+
+/// An egui text editor inside the library's classic sunken input frame.
+pub struct ClassicTextEdit<'a> {
+    edit: egui::TextEdit<'a>,
+    size: Option<Vec2>,
+    palette: Option<Palette>,
+}
+
+impl<'a> ClassicTextEdit<'a> {
+    /// Wrap an egui text editor in a reusable classic input frame.
+    pub fn new(edit: egui::TextEdit<'a>) -> Self {
+        Self {
+            edit,
+            size: None,
+            palette: None,
+        }
+    }
+
+    /// Set the outside size of the framed text editor in egui points.
+    pub fn size(mut self, size: Vec2) -> Self {
+        self.size = Some(size.max(Vec2::ZERO));
+        self
+    }
+
+    /// Use a local palette instead of the one installed in the egui context.
+    pub fn palette(mut self, palette: Palette) -> Self {
+        self.palette = Some(palette);
+        self
+    }
+
+    /// Show the text editor and return its egui response.
+    pub fn show(self, ui: &mut Ui) -> Response {
+        let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
+        BevelFrame::sunken()
+            .palette(palette)
+            .fill(palette.input)
+            .inner_margin(Margin::same(2))
+            .show(ui, |ui| {
+                let edit = self.edit.frame(Frame::NONE.inner_margin(Margin {
+                    left: 2,
+                    right: 2,
+                    top: 0,
+                    bottom: 0,
+                }));
+                if let Some(size) = self.size {
+                    ui.add_sized([(size.x - 4.0).max(1.0), (size.y - 4.0).max(1.0)], edit)
+                } else {
+                    ui.add(edit)
+                }
+            })
+            .inner
+    }
+}
+
+impl Widget for ClassicTextEdit<'_> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        self.show(ui)
+    }
+}
 
 /// A classic dialog group box with a label interrupting its top edge.
 #[derive(Clone, Debug)]
@@ -538,6 +598,124 @@ impl ClassicComboArrow {
             },
             Stroke::NONE,
         ));
+    }
+}
+
+/// A classic framed combo box that uses egui for its popup interaction.
+pub struct ClassicComboBox {
+    selected_text: String,
+    id_salt: egui::Id,
+    width: f32,
+    arrow_width: f32,
+    enabled: bool,
+    palette: Option<Palette>,
+}
+
+impl ClassicComboBox {
+    /// Create a combo box with the text shown for its current value.
+    pub fn new(selected_text: impl Into<String>) -> Self {
+        Self {
+            selected_text: selected_text.into(),
+            id_salt: egui::Id::NULL.with("classic95-combo-box"),
+            width: 120.0,
+            arrow_width: 22.0,
+            enabled: true,
+            palette: None,
+        }
+    }
+
+    /// Set a stable identifier when multiple combo boxes share a UI.
+    pub fn id_salt(mut self, salt: impl std::hash::Hash + std::fmt::Debug) -> Self {
+        self.id_salt = egui::Id::NULL.with(salt);
+        self
+    }
+
+    /// Set the outside width of the combo box in egui points.
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width.max(0.0);
+        self
+    }
+
+    /// Set the width of the raised arrow button in egui points.
+    pub fn arrow_width(mut self, width: f32) -> Self {
+        self.arrow_width = width.max(1.0);
+        self
+    }
+
+    /// Enable or disable interaction with the combo box.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Use a local palette instead of the one installed in the egui context.
+    pub fn palette(mut self, palette: Palette) -> Self {
+        self.palette = Some(palette);
+        self
+    }
+
+    /// Show the combo box and return egui's response and optional popup contents.
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<Option<R>> {
+        let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
+        let enabled = self.enabled;
+        ui.add_enabled_ui(enabled, |ui| {
+            let arrow_rect = Rc::new(Cell::new(None));
+            let icon_arrow_rect = Rc::clone(&arrow_rect);
+            let id_salt = self.id_salt;
+            let selected_text = self.selected_text;
+            let width = self.width;
+            let arrow_width = self.arrow_width;
+            let frame = BevelFrame::sunken()
+                .palette(palette)
+                .fill(if enabled { palette.input } else { palette.face })
+                .inner_margin(Margin::same(1))
+                .show(ui, |ui| {
+                    let combo_id = ui.make_persistent_id(id_salt);
+                    let popup_is_open = egui::ComboBox::is_open(ui.ctx(), combo_id);
+                    let combo_has_focus = ui
+                        .ctx()
+                        .read_response(combo_id)
+                        .is_some_and(|response| response.has_focus());
+                    let arrow_key_pressed = ui.input(|input| {
+                        input.key_pressed(egui::Key::ArrowUp)
+                            || input.key_pressed(egui::Key::ArrowDown)
+                    });
+                    if !popup_is_open && combo_has_focus && arrow_key_pressed {
+                        egui::Popup::open_id(ui.ctx(), combo_id.with("popup"));
+                    }
+
+                    ui.spacing_mut().icon_width = arrow_width;
+                    ui.visuals_mut().button_frame = false;
+                    egui::ComboBox::from_id_salt(id_salt)
+                        .selected_text(selected_text)
+                        .width(width)
+                        .icon(move |_ui, rect, _visuals, _is_open| {
+                            icon_arrow_rect.set(Some(rect));
+                        })
+                        .popup_style(egui::style::StyleModifier::new(move |style| {
+                            classic_popup_style(style, &palette);
+                            style.visuals.popup_shadow = egui::Shadow::NONE;
+                            style.visuals.window_fill = palette.input;
+                            style.visuals.window_stroke = Stroke::new(1.0, palette.text);
+                            style.visuals.window_corner_radius = CornerRadius::ZERO;
+                            style.visuals.menu_corner_radius = CornerRadius::ZERO;
+                            style.spacing.menu_margin = Margin::ZERO;
+                            style.spacing.item_spacing.y = 0.0;
+                            style.spacing.interact_size.y = 20.0;
+                            style.spacing.button_padding = vec2(3.0, 0.0);
+                        }))
+                        .show_ui(ui, add_contents)
+                });
+            if let Some(rect) = arrow_rect.get() {
+                ClassicComboArrow::new().palette(palette).show(ui, rect);
+            }
+            frame.inner
+        })
+        .inner
     }
 }
 

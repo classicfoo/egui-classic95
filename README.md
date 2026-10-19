@@ -77,6 +77,25 @@ if let Some(index) = list.clicked {
 }
 ```
 
+Wrap egui text editing and combo-box behavior in reusable classic controls:
+
+```rust
+let name = ClassicTextEdit::new(
+    egui::TextEdit::singleline(&mut self.name).hint_text("Enter a name"),
+)
+.size(egui::vec2(ui.available_width(), 24.0))
+.show(ui);
+
+let display_mode = ClassicComboBox::new(self.display_mode.clone())
+    .id_salt("display-mode")
+    .width(156.0)
+    .show(ui, |ui| {
+        for option in ["Standard", "Large icons", "Details"] {
+            ui.selectable_value(&mut self.display_mode, option.to_owned(), option);
+        }
+    });
+```
+
 Use a report view for tabular data and keep the selected source row in application state:
 
 ```rust
@@ -151,8 +170,9 @@ The title, icon, menu labels, menu actions, and page contents remain application
 - `ClassicToolbar` provides a reusable toolbar panel for application-defined controls. Its raised `ClassicToolbarButton`s can show a pressed selected state.
 - `ClassicTooltip` adds delayed, pointer-positioned pale-yellow tooltips to egui responses, including disabled controls.
 - `ClassicCheckbox`, `ClassicRadioButton`, `ClassicSlider`, `ClassicProgressBar`, `ClassicComboArrow`, `ClassicScrollButton`, and `ClassicStatusBar` provide reusable control visuals.
+- `ClassicTextEdit` wraps egui text editing in a classic sunken input frame; `ClassicComboBox` applies a classic field, arrow, and popup style while keeping egui's selection behavior.
 
-Text editing, combo boxes, and collapsible groups remain egui controls, so their editing and keyboard behavior stays native. `ClassicCheckbox`, `ClassicRadioButton`, and `ClassicSlider` keep egui's interaction behavior while drawing the classic visuals; `ClassicTabs` provides a reusable classic tab row and panel.
+`ClassicTextEdit`, `ClassicComboBox`, `ClassicCheckbox`, `ClassicRadioButton`, and `ClassicSlider` keep egui's editing and interaction behavior while drawing reusable classic visuals. Collapsible groups remain egui controls; `ClassicTabs` provides a reusable classic tab row and panel.
 
 ## Design references
 

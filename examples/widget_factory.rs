@@ -8,15 +8,14 @@ use egui::{
     vec2,
 };
 use egui_classic95::{
-    Bevel, BevelFrame, Classic95, ClassicButton, ClassicCheckbox, ClassicComboArrow,
-    ClassicGroupBox, ClassicListBox, ClassicListView, ClassicListViewColumn, ClassicMenuBar,
-    ClassicMenuItem, ClassicMenuPopup, ClassicMenuSeparator, ClassicProgressBar,
-    ClassicRadioButton, ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicSystemMenu,
-    ClassicTabs, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton, ClassicTooltip,
-    ClassicTreeNode, ClassicTreeView, ClassicWindowFrame, Palette, classic_popup_style,
+    Bevel, BevelFrame, Classic95, ClassicButton, ClassicCheckbox, ClassicComboBox, ClassicGroupBox,
+    ClassicListBox, ClassicListView, ClassicListViewColumn, ClassicMenuBar, ClassicMenuItem,
+    ClassicMenuPopup, ClassicMenuSeparator, ClassicProgressBar, ClassicRadioButton,
+    ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicSystemMenu, ClassicTabs,
+    ClassicTextEdit, ClassicTitleBar, ClassicToolbar, ClassicToolbarButton, ClassicTooltip,
+    ClassicTreeNode, ClassicTreeView, ClassicWindowFrame, Palette,
     horizontal_separator_with_palette, paint_bevel, vertical_separator_with_palette,
 };
-use std::{cell::Cell, rc::Rc};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -436,6 +435,7 @@ impl FactoryApp {
         let bar_width = 16.0;
         let viewport_width = (region.x - bar_width).max(1.0);
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
             let scroll = ui.allocate_ui_with_layout(
                 vec2(viewport_width, region.y),
                 Layout::top_down(Align::Min),
@@ -656,12 +656,12 @@ impl FactoryApp {
         section(ui, p, "Text fields", |ui| {
             ui.horizontal(|ui| {
                 ui.label("Name:");
-                let response = classic_text_edit(
-                    ui,
-                    vec2(ui.available_width(), 24.0),
+                let response = ClassicTextEdit::new(
                     egui::TextEdit::singleline(&mut self.name).hint_text("Enter a name"),
-                    p,
-                );
+                )
+                .size(vec2(ui.available_width(), 24.0))
+                .palette(p)
+                .show(ui);
                 if response.changed() {
                     self.last_action = "Name field edited".to_owned();
                 }
@@ -670,14 +670,14 @@ impl FactoryApp {
             ui.add_space(5.0);
             ui.horizontal(|ui| {
                 ui.label("Password:");
-                let response = classic_text_edit(
-                    ui,
-                    vec2(ui.available_width(), 24.0),
+                let response = ClassicTextEdit::new(
                     egui::TextEdit::singleline(&mut self.password)
                         .password(true)
                         .hint_text("Password"),
-                    p,
-                );
+                )
+                .size(vec2(ui.available_width(), 24.0))
+                .palette(p)
+                .show(ui);
                 if response.changed() {
                     self.last_action = "Password field edited".to_owned();
                 }
@@ -685,14 +685,14 @@ impl FactoryApp {
             });
             ui.add_space(5.0);
             ui.label("Notes:");
-            let response = classic_text_edit(
-                ui,
-                vec2(ui.available_width(), 72.0),
+            let response = ClassicTextEdit::new(
                 egui::TextEdit::multiline(&mut self.notes)
                     .desired_rows(3)
                     .hint_text("Write a note..."),
-                p,
-            );
+            )
+            .size(vec2(ui.available_width(), 72.0))
+            .palette(p)
+            .show(ui);
             if response.changed() {
                 self.last_action = "Notes field edited".to_owned();
             }
@@ -725,76 +725,23 @@ impl FactoryApp {
             ui.horizontal(|ui| {
                 ui.label("Display mode:");
                 let mut selection_changed = false;
-                let combo_enabled = self.combo_enabled;
-                let combo = ui
-                    .add_enabled_ui(combo_enabled, |ui| {
-                        let arrow_rect = Rc::new(Cell::new(None));
-                        let icon_arrow_rect = Rc::clone(&arrow_rect);
-                        let frame = BevelFrame::sunken()
-                            .palette(p)
-                            .fill(if combo_enabled { p.input } else { p.face })
-                            .inner_margin(Margin::same(1))
-                            .show(ui, |ui| {
-                                let combo_id = ui
-                                    .make_persistent_id(egui::IdSalt::new("factory-display-mode"));
-                                let popup_is_open = egui::ComboBox::is_open(ui.ctx(), combo_id);
-                                let combo_has_focus = ui
-                                    .ctx()
-                                    .read_response(combo_id)
-                                    .is_some_and(|response| response.has_focus());
-                                let arrow_key_pressed = ui.input(|input| {
-                                    input.key_pressed(egui::Key::ArrowUp)
-                                        || input.key_pressed(egui::Key::ArrowDown)
-                                });
-                                if !popup_is_open && combo_has_focus && arrow_key_pressed {
-                                    egui::Popup::open_id(ui.ctx(), combo_id.with("popup"));
-                                }
-
-                                // Figure 7.20's ~17 px arrow on a 121 px field scales to ~22 px here.
-                                ui.spacing_mut().icon_width = 22.0;
-                                ui.visuals_mut().button_frame = false;
-                                egui::ComboBox::from_id_salt("factory-display-mode")
-                                    .selected_text(self.combo_choice.clone())
-                                    .width(156.0)
-                                    .icon(move |_ui, rect, _visuals, _is_open| {
-                                        icon_arrow_rect.set(Some(rect));
-                                    })
-                                    .popup_style(egui::style::StyleModifier::new(move |style| {
-                                        classic_popup_style(style, &p);
-                                        style.visuals.popup_shadow = egui::Shadow::NONE;
-                                        style.visuals.window_fill = p.input;
-                                        style.visuals.window_stroke = Stroke::new(1.0, p.text);
-                                        style.visuals.window_corner_radius = CornerRadius::ZERO;
-                                        style.visuals.menu_corner_radius = CornerRadius::ZERO;
-                                        style.spacing.menu_margin = Margin::ZERO;
-                                        style.spacing.item_spacing.y = 0.0;
-                                        style.spacing.interact_size.y = 20.0;
-                                        style.spacing.button_padding = vec2(3.0, 0.0);
-                                    }))
-                                    .show_ui(ui, |ui| {
-                                        let options =
-                                            ["Standard", "Large icons", "Details", "List"];
-                                        for option in options {
-                                            let choice = ui.selectable_value(
-                                                &mut self.combo_choice,
-                                                option.to_owned(),
-                                                option,
-                                            );
-                                            selection_changed |= choice.changed();
-                                        }
-                                    })
-                            });
-
-                        // BevelFrame draws its edge after its contents; redraw the combo's
-                        // separate arrow above that edge so the button bevel remains visible.
-                        if let Some(rect) = arrow_rect.get() {
-                            ClassicComboArrow::new().palette(p).show(ui, rect);
+                let response = ClassicComboBox::new(self.combo_choice.clone())
+                    .palette(p)
+                    .enabled(self.combo_enabled)
+                    .id_salt("factory-display-mode")
+                    .width(156.0)
+                    .show(ui, |ui| {
+                        let options = ["Standard", "Large icons", "Details", "List"];
+                        for option in options {
+                            let choice = ui.selectable_value(
+                                &mut self.combo_choice,
+                                option.to_owned(),
+                                option,
+                            );
+                            selection_changed |= choice.changed();
                         }
-                        frame
                     })
-                    .inner
-                    .inner;
-                let response = combo.response;
+                    .response;
                 if selection_changed {
                     self.last_action = format!("Display mode: {}", self.combo_choice);
                 }
@@ -1056,14 +1003,19 @@ impl FactoryApp {
         section(ui, p, "Tooltips", |ui| {
             ui.label("Pause over a control to see a short description.");
             ui.add_space(5.0);
-            let response = ui.button("Hover for a tooltip");
+            let response = ClassicButton::new("Hover for a tooltip")
+                .palette(p)
+                .show(ui);
             let response = ClassicTooltip::new("A brief description of this command.")
                 .palette(p)
                 .show_for(response);
             self.observe("Tooltip button", &response);
 
             ui.add_space(5.0);
-            let response = ui.add_enabled(false, egui::Button::new("Unavailable command"));
+            let response = ClassicButton::new("Unavailable command")
+                .palette(p)
+                .enabled(false)
+                .show(ui);
             let response = ClassicTooltip::new("This command is unavailable in the current view.")
                 .palette(p)
                 .show_for(response);
@@ -1344,30 +1296,6 @@ fn edge_legend(ui: &mut Ui, palette: Palette, label: &str, style: LegendStyle) {
         }
         ui.label(label);
     });
-}
-
-fn classic_text_edit(
-    ui: &mut Ui,
-    size: egui::Vec2,
-    edit: egui::TextEdit<'_>,
-    palette: Palette,
-) -> Response {
-    BevelFrame::sunken()
-        .palette(palette)
-        .fill(palette.input)
-        .inner_margin(Margin::same(2))
-        .show(ui, |ui| {
-            ui.add_sized(
-                [(size.x - 4.0).max(1.0), (size.y - 4.0).max(1.0)],
-                edit.frame(egui::Frame::NONE.inner_margin(Margin {
-                    left: 2,
-                    right: 2,
-                    top: 0,
-                    bottom: 0,
-                })),
-            )
-        })
-        .inner
 }
 
 fn palette_editor(ui: &mut Ui, label: &str, color: &mut Color32) {
