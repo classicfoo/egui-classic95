@@ -251,8 +251,10 @@ impl<'a> ClassicTreeView<'a> {
                                         let depth = item.path.len().saturating_sub(1);
                                         let slot_left =
                                             rect.left() + 4.0 + depth as f32 * TREE_INDENT;
-                                        let expander_center =
-                                            pos2(slot_left + 4.5, rect.center().y);
+                                        let expander_center = pos2(
+                                            slot_left + TREE_EXPANDER_SIZE * 0.5,
+                                            rect.center().y,
+                                        );
                                         let label_x = slot_left + 12.0;
                                         paint_connectors(
                                             ui,
@@ -270,7 +272,7 @@ impl<'a> ClassicTreeView<'a> {
                                             let expanded_here = expanded.contains(&item.id);
                                             let expander_rect = Rect::from_center_size(
                                                 expander_center,
-                                                vec2(9.0, 9.0),
+                                                vec2(TREE_EXPANDER_SIZE, TREE_EXPANDER_SIZE),
                                             );
                                             ui.painter().rect_filled(
                                                 expander_rect,
@@ -518,6 +520,7 @@ struct VisibleNode<'a> {
 }
 
 const TREE_INDENT: f32 = 16.0;
+const TREE_EXPANDER_SIZE: f32 = 9.0;
 
 fn collect_initially_expanded(
     nodes: &[ClassicTreeNode],
@@ -615,9 +618,12 @@ fn paint_connectors(
 ) {
     let painter = ui.painter();
     for (level, continues) in ancestors_continue.iter().enumerate() {
-        let x = row_rect.left() + 4.0 + level as f32 * TREE_INDENT + 4.5;
+        let x = row_rect.left()
+            + 4.0
+            + level as f32 * TREE_INDENT
+            + TREE_EXPANDER_SIZE * 0.5;
         let top = if level + 1 == depth && is_first {
-            row_rect.top() - row_rect.height() * 0.5
+            row_rect.top() - TREE_EXPANDER_SIZE * 0.5
         } else {
             row_rect.top()
         };
@@ -635,9 +641,12 @@ fn paint_connectors(
     if depth == 0 {
         return;
     }
-    let parent_x = row_rect.left() + 4.0 + (depth - 1) as f32 * TREE_INDENT + 4.5;
+    let parent_x = row_rect.left()
+        + 4.0
+        + (depth - 1) as f32 * TREE_INDENT
+        + TREE_EXPANDER_SIZE * 0.5;
     let end_x = if has_children {
-        current_center.x - 4.5
+        current_center.x - TREE_EXPANDER_SIZE * 0.5
     } else {
         label_x - 2.0
     };
