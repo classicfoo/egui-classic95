@@ -390,6 +390,8 @@ impl<Value: PartialEq + Copy> Widget for ClassicRadioButton<'_, Value> {
 }
 
 /// A classic rail and rectangular thumb over egui's standard slider interaction.
+///
+/// The thumb stays raised while it is being dragged.
 pub struct ClassicSlider<'a> {
     value: &'a mut f32,
     range: RangeInclusive<f32>,
@@ -452,7 +454,6 @@ impl<'a> ClassicSlider<'a> {
             palette,
             response.rect,
             *self.value,
-            response.is_pointer_button_down_on(),
             self.range,
         );
         response
@@ -799,7 +800,8 @@ impl ClassicScrollButton {
 
 /// A reusable vertical classic scrollbar for application-managed offsets.
 ///
-/// It draws end arrows, a stippled shaft, and a proportional draggable thumb.
+/// It draws end arrows, a stippled shaft, and a proportional draggable thumb that stays raised
+/// while being dragged.
 pub struct ClassicScrollBar<'a> {
     offset: &'a mut f32,
     max_offset: f32,
@@ -941,16 +943,7 @@ impl<'a> ClassicScrollBar<'a> {
                 .data_mut(|data| data.remove_temp::<f32>(drag_start_id));
         }
 
-        paint_scrollbar_bevel(
-            ui.painter(),
-            thumb_rect,
-            if thumb.is_pointer_button_down_on() {
-                Bevel::Pressed
-            } else {
-                Bevel::Raised
-            },
-            &palette,
-        );
+        paint_scrollbar_bevel(ui.painter(), thumb_rect, Bevel::Raised, &palette);
         bar_response
     }
 }
@@ -1217,7 +1210,6 @@ fn paint_classic_slider(
     palette: Palette,
     rect: Rect,
     value: f32,
-    pressed: bool,
     range: RangeInclusive<f32>,
 ) {
     let half_handle = (rect.height() / 2.5) * 0.55;
@@ -1239,16 +1231,7 @@ fn paint_classic_slider(
     let thumb = Rect::from_center_size(pos2(center_x, center_y), vec2(12.0, rect.height() - 2.0));
     ui.painter()
         .rect_filled(thumb, CornerRadius::ZERO, palette.face);
-    paint_bevel(
-        ui.painter(),
-        thumb,
-        if pressed {
-            Bevel::Pressed
-        } else {
-            Bevel::Raised
-        },
-        &palette,
-    );
+    paint_bevel(ui.painter(), thumb, Bevel::Raised, &palette);
 }
 
 fn paint_bitmap_backdrop(ui: &Ui, origin: egui::Pos2, size: Vec2, color: Color32) {
