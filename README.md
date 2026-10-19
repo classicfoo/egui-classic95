@@ -144,6 +144,7 @@ The title, icon, menu labels, menu actions, and page contents remain application
 - `ClassicWindowFrame`, `ClassicTitleBar`, and `CaptionButton` provide the raised clipped window frame and pixel-drawn title controls.
 - `ClassicSystemMenu`, `ClassicMenuBar`, `ClassicMenuPopup`, `ClassicMenuItem`, and `ClassicMenuSeparator` supply classic menu styling while leaving menu content to the application.
 - `ClassicGroupBox` and `ClassicTabs` provide the classic labeled group and raised tabbed panel.
+- `ClassicScrollBar` provides app-managed vertical scrolling with end arrows, a stippled shaft, and a proportional draggable thumb. `ClassicListView` and `ClassicTreeView` reuse it when their rows overflow.
 - `ClassicListBox` provides a recessed list with full-width selectable rows and optional scrolling.
 - `ClassicListView` provides a single-selection report view with beveled column headers, full-width row selection, keyboard navigation, and optional scrolling.
 - `ClassicTreeNode` and `ClassicTreeView` provide indented, selectable trees with dotted connectors, plus/minus expanders, keyboard navigation, and optional scrolling.

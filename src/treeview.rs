@@ -6,7 +6,7 @@ use egui::{
 };
 
 use crate::theme::palette_for;
-use crate::{BevelFrame, Palette};
+use crate::{BevelFrame, ClassicScrollBar, Palette};
 
 /// A node in a [`ClassicTreeView`].
 #[derive(Clone, Debug)]
@@ -58,7 +58,8 @@ impl ClassicTreeNode {
     }
 }
 
-/// An indented, selectable tree with classic plus/minus expanders.
+/// An indented, selectable tree with classic plus/minus expanders and a reusable scrollbar when
+/// its rows overflow.
 #[derive(Debug)]
 pub struct ClassicTreeView<'a> {
     nodes: Vec<ClassicTreeNode>,
@@ -150,6 +151,19 @@ impl<'a> ClassicTreeView<'a> {
             .map(|height| height.min(natural_height))
             .unwrap_or(natural_height);
         let available_width = ui.available_width().max(1.0);
+        let has_vertical_overflow = visible.len() as f32 * row_height > visible_height;
+        let scrollbar_width = if has_vertical_overflow {
+            ClassicScrollBar::WIDTH
+        } else {
+            0.0
+        };
+        let content_width = (available_width - scrollbar_width).max(1.0);
+        let scroll_position_id = ui.scope_id().with((id_salt, "classic-scroll-position"));
+        let (mut scroll_position, mut pending_scroll_position) = ui.ctx().data(|data| {
+            data.get_temp::<(f32, Option<f32>)>(scroll_position_id)
+                .unwrap_or_default()
+        });
+        let scrollbar_id = ui.scope_id().with((id_salt, "classic-scrollbar"));
         let mut changed = false;
         if let Some(path) = selected.as_ref() {
             if !path_exists(&nodes, path) {
@@ -187,158 +201,213 @@ impl<'a> ClassicTreeView<'a> {
                     Sense::focusable_noninteractive(),
                 ));
                 ui.set_min_width(available_width);
-                ScrollArea::vertical()
-                    .id_salt(id_salt.with("rows"))
-                    .max_height(visible_height)
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        ui.set_min_width(available_width);
-                        for item in &visible {
-                            let (_, rect) = ui.allocate_space(vec2(available_width, row_height));
-                            let row_id = tree_id.with(("node", item.path.clone()));
-                            let row_response = ui.interact(rect, row_id, Sense::click());
-                            if row_response.clicked() {
-                                clicked = Some(item.path.clone());
-                                if selected.as_ref() != Some(&item.path) {
-                                    *selected = Some(item.path.clone());
-                                    changed = true;
-                                }
-                                ui.ctx().memory_mut(|memory| {
-                                    memory.request_focus(focus_id);
-                                });
-                            }
-
-                            if row_response.double_clicked() && !item.node.children.is_empty() {
-                                toggle_expansion(&mut expanded, item.id);
-                                expanded_changed = true;
-                            }
-
-                            let depth = item.path.len().saturating_sub(1);
-                            let slot_left = rect.left() + 4.0 + depth as f32 * TREE_INDENT;
-                            let expander_center = pos2(slot_left + 4.5, rect.center().y);
-                            let label_x = slot_left + 12.0;
-                            paint_connectors(
-                                ui,
-                                rect,
-                                depth,
-                                item.ancestors_continue.as_slice(),
-                                item.is_first,
-                                !item.node.children.is_empty(),
-                                expander_center,
-                                label_x,
-                                palette,
-                            );
-
-                            if !item.node.children.is_empty() {
-                                let expanded_here = expanded.contains(&item.id);
-                                let expander_rect =
-                                    Rect::from_center_size(expander_center, vec2(9.0, 9.0));
-                                ui.painter().rect_filled(
-                                    expander_rect,
-                                    CornerRadius::ZERO,
-                                    palette.input,
-                                );
-                                ui.painter().rect_stroke(
-                                    expander_rect,
-                                    CornerRadius::ZERO,
-                                    Stroke::new(1.0, palette.text),
-                                    StrokeKind::Inside,
-                                );
-                                ui.painter().line_segment(
-                                    [
-                                        pos2(expander_rect.left() + 2.0, expander_rect.center().y),
-                                        pos2(expander_rect.right() - 2.0, expander_rect.center().y),
-                                    ],
-                                    Stroke::new(1.0, palette.text),
-                                );
-                                if !expanded_here {
-                                    ui.painter().line_segment(
-                                        [
-                                            pos2(
-                                                expander_rect.center().x,
-                                                expander_rect.top() + 2.0,
-                                            ),
-                                            pos2(
-                                                expander_rect.center().x,
-                                                expander_rect.bottom() - 2.0,
-                                            ),
-                                        ],
-                                        Stroke::new(1.0, palette.text),
+                ui.allocate_ui_with_layout(
+                    vec2(available_width, visible_height),
+                    egui::Layout::left_to_right(Align::Min),
+                    |ui| {
+                        ui.allocate_ui_with_layout(
+                            vec2(content_width, visible_height),
+                            egui::Layout::top_down(Align::Min),
+                            |ui| {
+                                let mut scroll_area = ScrollArea::vertical()
+                                    .id_salt(id_salt.with("rows"))
+                                    .max_height(visible_height)
+                                    .auto_shrink([false, false])
+                                    .scroll_bar_visibility(
+                                        egui::scroll_area::ScrollBarVisibility::AlwaysHidden,
                                     );
+                                if let Some(offset) = pending_scroll_position.take() {
+                                    scroll_area = scroll_area.vertical_scroll_offset(offset);
                                 }
-                                let expander_response = ui
-                                    .interact(
-                                        expander_rect,
-                                        row_id.with("expander"),
-                                        Sense::click(),
-                                    )
-                                    .on_hover_cursor(egui::CursorIcon::PointingHand);
-                                if expander_response.clicked() {
-                                    clicked = Some(item.path.clone());
-                                    if selected.as_ref() != Some(&item.path) {
-                                        *selected = Some(item.path.clone());
-                                        changed = true;
-                                    }
-                                    ui.ctx().memory_mut(|memory| {
-                                        memory.request_focus(focus_id);
-                                    });
-                                    let was_expanded = expanded.contains(&item.id);
-                                    toggle_expansion(&mut expanded, item.id);
-                                    if was_expanded
-                                        && selected.as_ref().is_some_and(|path| {
-                                            path.len() > item.path.len()
-                                                && path.starts_with(&item.path)
-                                        })
-                                    {
-                                        *selected = Some(item.path.clone());
-                                        changed = true;
-                                    }
-                                    expanded_changed = true;
-                                }
-                            }
+                                let output = scroll_area.show(ui, |ui| {
+                                    ui.set_min_width(content_width);
+                                    for item in &visible {
+                                        let (_, rect) =
+                                            ui.allocate_space(vec2(content_width, row_height));
+                                        let row_id = tree_id.with(("node", item.path.clone()));
+                                        let row_response =
+                                            ui.interact(rect, row_id, Sense::click());
+                                        if row_response.clicked() {
+                                            clicked = Some(item.path.clone());
+                                            if selected.as_ref() != Some(&item.path) {
+                                                *selected = Some(item.path.clone());
+                                                changed = true;
+                                            }
+                                            ui.ctx().memory_mut(|memory| {
+                                                memory.request_focus(focus_id);
+                                            });
+                                        }
 
-                            let is_selected = selected.as_ref() == Some(&item.path);
-                            let galley = ui.painter().layout_no_wrap(
-                                item.node.label.clone(),
-                                font_id.clone(),
-                                if is_selected {
-                                    palette.selection_text
-                                } else {
-                                    palette.text
-                                },
-                            );
-                            if is_selected {
-                                let selection_rect = Rect::from_min_size(
-                                    pos2(label_x - 1.0, rect.top()),
-                                    vec2(galley.size().x + 3.0, rect.height()),
-                                );
-                                ui.painter().rect_filled(
-                                    selection_rect,
-                                    CornerRadius::ZERO,
-                                    palette.selection,
-                                );
+                                        if row_response.double_clicked()
+                                            && !item.node.children.is_empty()
+                                        {
+                                            toggle_expansion(&mut expanded, item.id);
+                                            expanded_changed = true;
+                                        }
+
+                                        let depth = item.path.len().saturating_sub(1);
+                                        let slot_left =
+                                            rect.left() + 4.0 + depth as f32 * TREE_INDENT;
+                                        let expander_center =
+                                            pos2(slot_left + 4.5, rect.center().y);
+                                        let label_x = slot_left + 12.0;
+                                        paint_connectors(
+                                            ui,
+                                            rect,
+                                            depth,
+                                            item.ancestors_continue.as_slice(),
+                                            item.is_first,
+                                            !item.node.children.is_empty(),
+                                            expander_center,
+                                            label_x,
+                                            palette,
+                                        );
+
+                                        if !item.node.children.is_empty() {
+                                            let expanded_here = expanded.contains(&item.id);
+                                            let expander_rect = Rect::from_center_size(
+                                                expander_center,
+                                                vec2(9.0, 9.0),
+                                            );
+                                            ui.painter().rect_filled(
+                                                expander_rect,
+                                                CornerRadius::ZERO,
+                                                palette.input,
+                                            );
+                                            ui.painter().rect_stroke(
+                                                expander_rect,
+                                                CornerRadius::ZERO,
+                                                Stroke::new(1.0, palette.text),
+                                                StrokeKind::Inside,
+                                            );
+                                            ui.painter().line_segment(
+                                                [
+                                                    pos2(
+                                                        expander_rect.left() + 2.0,
+                                                        expander_rect.center().y,
+                                                    ),
+                                                    pos2(
+                                                        expander_rect.right() - 2.0,
+                                                        expander_rect.center().y,
+                                                    ),
+                                                ],
+                                                Stroke::new(1.0, palette.text),
+                                            );
+                                            if !expanded_here {
+                                                ui.painter().line_segment(
+                                                    [
+                                                        pos2(
+                                                            expander_rect.center().x,
+                                                            expander_rect.top() + 2.0,
+                                                        ),
+                                                        pos2(
+                                                            expander_rect.center().x,
+                                                            expander_rect.bottom() - 2.0,
+                                                        ),
+                                                    ],
+                                                    Stroke::new(1.0, palette.text),
+                                                );
+                                            }
+                                            let expander_response = ui
+                                                .interact(
+                                                    expander_rect,
+                                                    row_id.with("expander"),
+                                                    Sense::click(),
+                                                )
+                                                .on_hover_cursor(egui::CursorIcon::PointingHand);
+                                            if expander_response.clicked() {
+                                                clicked = Some(item.path.clone());
+                                                if selected.as_ref() != Some(&item.path) {
+                                                    *selected = Some(item.path.clone());
+                                                    changed = true;
+                                                }
+                                                ui.ctx().memory_mut(|memory| {
+                                                    memory.request_focus(focus_id);
+                                                });
+                                                let was_expanded = expanded.contains(&item.id);
+                                                toggle_expansion(&mut expanded, item.id);
+                                                if was_expanded
+                                                    && selected.as_ref().is_some_and(|path| {
+                                                        path.len() > item.path.len()
+                                                            && path.starts_with(&item.path)
+                                                    })
+                                                {
+                                                    *selected = Some(item.path.clone());
+                                                    changed = true;
+                                                }
+                                                expanded_changed = true;
+                                            }
+                                        }
+
+                                        let is_selected = selected.as_ref() == Some(&item.path);
+                                        let galley = ui.painter().layout_no_wrap(
+                                            item.node.label.clone(),
+                                            font_id.clone(),
+                                            if is_selected {
+                                                palette.selection_text
+                                            } else {
+                                                palette.text
+                                            },
+                                        );
+                                        if is_selected {
+                                            let selection_rect = Rect::from_min_size(
+                                                pos2(label_x - 1.0, rect.top()),
+                                                vec2(galley.size().x + 3.0, rect.height()),
+                                            );
+                                            ui.painter().rect_filled(
+                                                selection_rect,
+                                                CornerRadius::ZERO,
+                                                palette.selection,
+                                            );
+                                        }
+                                        ui.painter().galley(
+                                            pos2(label_x, rect.center().y - galley.size().y * 0.5),
+                                            galley,
+                                            if is_selected {
+                                                palette.selection_text
+                                            } else {
+                                                palette.text
+                                            },
+                                        );
+                                        row_response.widget_info(|| {
+                                            egui::WidgetInfo::selected(
+                                                egui::Role::TreeItem,
+                                                true,
+                                                is_selected,
+                                                &item.node.label,
+                                            )
+                                        });
+                                        row_responses.push(row_response);
+                                    }
+                                });
+                                scroll_position = output.state.clamped_offset().y;
+                            },
+                        );
+                        if has_vertical_overflow {
+                            let old_position = scroll_position;
+                            let _ = ClassicScrollBar::new(
+                                &mut scroll_position,
+                                (visible.len() as f32 * row_height - visible_height).max(0.0),
+                                visible_height,
+                                visible_height,
+                            )
+                            .palette(palette)
+                            .scroll_step(row_height)
+                            .id_salt(scrollbar_id)
+                            .show(ui);
+                            if scroll_position != old_position {
+                                pending_scroll_position = Some(scroll_position);
                             }
-                            ui.painter().galley(
-                                pos2(label_x, rect.center().y - galley.size().y * 0.5),
-                                galley,
-                                if is_selected {
-                                    palette.selection_text
-                                } else {
-                                    palette.text
-                                },
-                            );
-                            row_response.widget_info(|| {
-                                egui::WidgetInfo::selected(
-                                    egui::Role::TreeItem,
-                                    true,
-                                    is_selected,
-                                    &item.node.label,
-                                )
-                            });
-                            row_responses.push(row_response);
                         }
-                    });
+                    },
+                );
             });
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(
+                scroll_position_id,
+                (scroll_position, pending_scroll_position),
+            );
+        });
         let focus = focus_response.expect("tree view focus response was not created");
         let selected_index = selected
             .as_ref()
@@ -565,7 +634,7 @@ fn paint_connectors(
     }
     let parent_x = row_rect.left() + 4.0 + (depth - 1) as f32 * TREE_INDENT + 4.5;
     let end_x = if has_children {
-        current_center.x
+        current_center.x - 4.5
     } else {
         label_x - 2.0
     };
@@ -585,10 +654,15 @@ fn dotted_vertical(painter: &egui::Painter, x: f32, top: f32, bottom: f32, color
 }
 
 fn dotted_horizontal(painter: &egui::Painter, left: f32, right: f32, y: f32, color: egui::Color32) {
+    let y = y.round();
+    let painter = painter.with_clip_rect(Rect::from_min_max(
+        pos2(left, y - 1.0),
+        pos2(right, y + 2.0),
+    ));
     let mut x = left.ceil();
     while x < right {
         painter.rect_filled(
-            Rect::from_min_size(pos2(x, y.round()), vec2(1.25, 1.25)),
+            Rect::from_min_size(pos2(x, y), vec2(1.25, 1.25)),
             CornerRadius::ZERO,
             color,
         );

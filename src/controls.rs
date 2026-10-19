@@ -621,17 +621,23 @@ impl ClassicScrollButton {
     }
 }
 
-/// A vertical classic scrollbar with arrow buttons, a stippled track, and a draggable thumb.
+/// A reusable vertical classic scrollbar for application-managed offsets.
+///
+/// It draws end arrows, a stippled shaft, and a proportional draggable thumb.
 pub struct ClassicScrollBar<'a> {
     offset: &'a mut f32,
     max_offset: f32,
     viewport_length: f32,
     height: f32,
+    scroll_step: f32,
     palette: Option<Palette>,
     id: egui::Id,
 }
 
 impl<'a> ClassicScrollBar<'a> {
+    /// Width of the classic vertical scrollbar, including its arrow buttons.
+    pub const WIDTH: f32 = 16.0;
+
     /// Create a scrollbar for an application-managed scroll offset.
     pub fn new(offset: &'a mut f32, max_offset: f32, viewport_length: f32, height: f32) -> Self {
         Self {
@@ -639,9 +645,16 @@ impl<'a> ClassicScrollBar<'a> {
             max_offset: max_offset.max(0.0),
             viewport_length: viewport_length.max(0.0),
             height: height.max(0.0),
+            scroll_step: 32.0,
             palette: None,
             id: egui::Id::NULL.with("classic95-scrollbar"),
         }
+    }
+
+    /// Set the distance moved by one arrow-button click.
+    pub fn scroll_step(mut self, step: f32) -> Self {
+        self.scroll_step = step.max(1.0);
+        self
     }
 
     /// Use a local palette instead of the one installed in the egui context.
@@ -660,17 +673,17 @@ impl<'a> ClassicScrollBar<'a> {
     pub fn show(self, ui: &mut Ui) -> Response {
         let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
         let (bar_rect, bar_response) =
-            ui.allocate_exact_size(vec2(16.0, self.height), Sense::hover());
+            ui.allocate_exact_size(vec2(Self::WIDTH, self.height), Sense::hover());
         *self.offset = self.offset.clamp(0.0, self.max_offset);
         if self.max_offset <= 0.0 || self.height < 36.0 {
             return bar_response;
         }
 
-        let arrow_size = 16.0_f32.min(self.height * 0.5);
-        let up_rect = Rect::from_min_size(bar_rect.min, vec2(16.0, arrow_size));
+        let arrow_size = Self::WIDTH.min(self.height * 0.5);
+        let up_rect = Rect::from_min_size(bar_rect.min, vec2(Self::WIDTH, arrow_size));
         let down_rect = Rect::from_min_size(
             pos2(bar_rect.left(), bar_rect.bottom() - arrow_size),
-            vec2(16.0, arrow_size),
+            vec2(Self::WIDTH, arrow_size),
         );
         if ClassicScrollButton::new(ScrollButtonDirection::Up)
             .palette(palette)
@@ -678,7 +691,7 @@ impl<'a> ClassicScrollBar<'a> {
             .show_at(ui, up_rect)
             .clicked()
         {
-            *self.offset = (*self.offset - 32.0).max(0.0);
+            *self.offset = (*self.offset - self.scroll_step).max(0.0);
         }
         if ClassicScrollButton::new(ScrollButtonDirection::Down)
             .palette(palette)
@@ -686,7 +699,7 @@ impl<'a> ClassicScrollBar<'a> {
             .show_at(ui, down_rect)
             .clicked()
         {
-            *self.offset = (*self.offset + 32.0).min(self.max_offset);
+            *self.offset = (*self.offset + self.scroll_step).min(self.max_offset);
         }
 
         let track_rect = Rect::from_min_max(
@@ -700,7 +713,7 @@ impl<'a> ClassicScrollBar<'a> {
             for x in (track_rect.left() as i32..track_rect.right() as i32).step_by(2) {
                 if ((x / 2) + (y / 2)) & 1 == 0 {
                     ui.painter().rect_filled(
-                        Rect::from_min_size(pos2(x as f32, y as f32), vec2(2.0, 2.0)),
+                        Rect::from_min_size(pos2(x as f32, y as f32), vec2(1.25, 1.25)),
                         CornerRadius::ZERO,
                         palette.highlight,
                     );

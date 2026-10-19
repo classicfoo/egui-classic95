@@ -4,7 +4,7 @@ use egui::{
 };
 
 use crate::theme::palette_for;
-use crate::{Bevel, BevelFrame, Palette, paint_bevel};
+use crate::{Bevel, BevelFrame, ClassicScrollBar, Palette, paint_bevel};
 
 /// A report-view column in a [`ClassicListView`].
 #[derive(Clone, Debug)]
@@ -32,7 +32,8 @@ impl ClassicListViewColumn {
     }
 }
 
-/// A recessed, single-selection report view with classic column headers.
+/// A recessed, single-selection report view with classic column headers and a reusable scrollbar
+/// when its rows overflow.
 #[derive(Debug)]
 pub struct ClassicListView<'a> {
     columns: Vec<ClassicListViewColumn>,
@@ -141,11 +142,17 @@ impl<'a> ClassicListView<'a> {
         let available_width = ui.available_width().max(1.0);
         let has_vertical_overflow = rows.len() as f32 * row_height > visible_rows_height;
         let scrollbar_width = if has_vertical_overflow {
-            ui.spacing().scroll.bar_width
+            ClassicScrollBar::WIDTH
         } else {
             0.0
         };
         let content_width = (available_width - scrollbar_width).max(1.0);
+        let scroll_position_id = ui.scope_id().with((id_salt, "classic-scroll-position"));
+        let (mut scroll_position, mut pending_scroll_position) = ui.ctx().data(|data| {
+            data.get_temp::<(f32, Option<f32>)>(scroll_position_id)
+                .unwrap_or_default()
+        });
+        let scrollbar_id = ui.scope_id().with((id_salt, "classic-scrollbar"));
         let column_widths = column_widths(&columns, content_width);
         let font_id = ui
             .style()
@@ -170,114 +177,156 @@ impl<'a> ClassicListView<'a> {
                 ui.set_min_width(available_width);
                 ui.allocate_ui_with_layout(
                     vec2(available_width, content_height),
-                    Layout::top_down(Align::Min),
+                    Layout::left_to_right(Align::Min),
                     |ui| {
-                        let (header_rect, _) = ui.allocate_exact_size(
-                            vec2(content_width, header_height),
-                            Sense::hover(),
-                        );
-                        let mut x = header_rect.left();
-                        for (column_index, (column, width)) in
-                            columns.iter().zip(&column_widths).enumerate()
-                        {
-                            let rect = Rect::from_min_size(
-                                pos2(x, header_rect.top()),
-                                vec2(*width, header_height),
-                            );
-                            ui.painter()
-                                .rect_filled(rect, CornerRadius::ZERO, palette.face);
-                            paint_bevel(ui.painter(), rect, Bevel::Raised, &palette);
-                            let text_rect = rect.shrink2(vec2(5.0, 1.0));
-                            ui.painter().with_clip_rect(text_rect).text(
-                                text_rect.left_center(),
-                                Align2::LEFT_CENTER,
-                                &column.title,
-                                font_id.clone(),
-                                palette.text,
-                            );
-                            let response = ui.interact(
-                                rect,
-                                ui.make_persistent_id((id_salt, "header", column_index)),
-                                Sense::hover(),
-                            );
-                            header_responses.push(response);
-                            x += width;
-                        }
-
-                        ScrollArea::vertical()
-                            .id_salt(id_salt.with("rows"))
-                            .max_height(visible_rows_height)
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                ui.set_min_width(content_width);
-                                for (row_index, values) in rows.iter().enumerate() {
-                                    let width = ui.available_width().max(1.0);
-                                    let (_, rect) = ui.allocate_space(vec2(width, row_height));
-                                    let row_id = ui.make_persistent_id((id_salt, "row", row_index));
-                                    let response = ui.interact(rect, row_id, Sense::click());
-                                    if response.clicked() {
-                                        clicked = Some(row_index);
-                                        if *selected != Some(row_index) {
-                                            *selected = Some(row_index);
-                                            changed = true;
-                                        }
-                                        ui.ctx().memory_mut(|memory| {
-                                            memory.request_focus(focus_id);
-                                        });
-                                    }
-
-                                    if let Some(value) = values.first() {
-                                        response.widget_info(|| {
-                                            egui::WidgetInfo::selected(
-                                                egui::Role::ListBoxOption,
-                                                true,
-                                                *selected == Some(row_index),
-                                                value,
-                                            )
-                                        });
-                                    }
-
-                                    let is_selected = *selected == Some(row_index);
-                                    let color = if is_selected {
-                                        palette.selection_text
-                                    } else {
-                                        palette.text
-                                    };
-                                    if is_selected {
-                                        ui.painter().rect_filled(
-                                            rect,
-                                            CornerRadius::ZERO,
-                                            palette.selection,
-                                        );
-                                    }
-
-                                    let mut x = rect.left();
-                                    for (column_index, column_width) in
-                                        column_widths.iter().enumerate()
-                                    {
-                                        let cell_rect = Rect::from_min_size(
-                                            pos2(x, rect.top()),
-                                            vec2(*column_width, rect.height()),
-                                        );
-                                        if let Some(value) = values.get(column_index) {
-                                            ui.painter()
-                                                .with_clip_rect(cell_rect.shrink2(vec2(5.0, 0.0)))
-                                                .text(
-                                                    cell_rect.left_center() + vec2(5.0, 0.0),
-                                                    Align2::LEFT_CENTER,
-                                                    value,
-                                                    font_id.clone(),
-                                                    color,
-                                                );
-                                        }
-                                        x += column_width;
-                                    }
-                                    row_responses.push(response);
+                        ui.allocate_ui_with_layout(
+                            vec2(content_width, content_height),
+                            Layout::top_down(Align::Min),
+                            |ui| {
+                                let (header_rect, _) = ui.allocate_exact_size(
+                                    vec2(content_width, header_height),
+                                    Sense::hover(),
+                                );
+                                let mut x = header_rect.left();
+                                for (column_index, (column, width)) in
+                                    columns.iter().zip(&column_widths).enumerate()
+                                {
+                                    let rect = Rect::from_min_size(
+                                        pos2(x, header_rect.top()),
+                                        vec2(*width, header_height),
+                                    );
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        CornerRadius::ZERO,
+                                        palette.face,
+                                    );
+                                    paint_bevel(ui.painter(), rect, Bevel::Raised, &palette);
+                                    let text_rect = rect.shrink2(vec2(5.0, 1.0));
+                                    ui.painter().with_clip_rect(text_rect).text(
+                                        text_rect.left_center(),
+                                        Align2::LEFT_CENTER,
+                                        &column.title,
+                                        font_id.clone(),
+                                        palette.text,
+                                    );
+                                    let response = ui.interact(
+                                        rect,
+                                        ui.make_persistent_id((id_salt, "header", column_index)),
+                                        Sense::hover(),
+                                    );
+                                    header_responses.push(response);
+                                    x += width;
                                 }
-                            });
+
+                                let mut scroll_area = ScrollArea::vertical()
+                                    .id_salt(id_salt.with("rows"))
+                                    .max_height(visible_rows_height)
+                                    .auto_shrink([false, false])
+                                    .scroll_bar_visibility(
+                                        egui::scroll_area::ScrollBarVisibility::AlwaysHidden,
+                                    );
+                                if let Some(offset) = pending_scroll_position.take() {
+                                    scroll_area = scroll_area.vertical_scroll_offset(offset);
+                                }
+                                let output = scroll_area.show(ui, |ui| {
+                                    ui.set_min_width(content_width);
+                                    for (row_index, values) in rows.iter().enumerate() {
+                                        let width = ui.available_width().max(1.0);
+                                        let (_, rect) = ui.allocate_space(vec2(width, row_height));
+                                        let row_id =
+                                            ui.make_persistent_id((id_salt, "row", row_index));
+                                        let response = ui.interact(rect, row_id, Sense::click());
+                                        if response.clicked() {
+                                            clicked = Some(row_index);
+                                            if *selected != Some(row_index) {
+                                                *selected = Some(row_index);
+                                                changed = true;
+                                            }
+                                            ui.ctx().memory_mut(|memory| {
+                                                memory.request_focus(focus_id);
+                                            });
+                                        }
+
+                                        if let Some(value) = values.first() {
+                                            response.widget_info(|| {
+                                                egui::WidgetInfo::selected(
+                                                    egui::Role::ListBoxOption,
+                                                    true,
+                                                    *selected == Some(row_index),
+                                                    value,
+                                                )
+                                            });
+                                        }
+
+                                        let is_selected = *selected == Some(row_index);
+                                        let color = if is_selected {
+                                            palette.selection_text
+                                        } else {
+                                            palette.text
+                                        };
+                                        if is_selected {
+                                            ui.painter().rect_filled(
+                                                rect,
+                                                CornerRadius::ZERO,
+                                                palette.selection,
+                                            );
+                                        }
+
+                                        let mut x = rect.left();
+                                        for (column_index, column_width) in
+                                            column_widths.iter().enumerate()
+                                        {
+                                            let cell_rect = Rect::from_min_size(
+                                                pos2(x, rect.top()),
+                                                vec2(*column_width, rect.height()),
+                                            );
+                                            if let Some(value) = values.get(column_index) {
+                                                ui.painter()
+                                                    .with_clip_rect(
+                                                        cell_rect.shrink2(vec2(5.0, 0.0)),
+                                                    )
+                                                    .text(
+                                                        cell_rect.left_center() + vec2(5.0, 0.0),
+                                                        Align2::LEFT_CENTER,
+                                                        value,
+                                                        font_id.clone(),
+                                                        color,
+                                                    );
+                                            }
+                                            x += column_width;
+                                        }
+                                        row_responses.push(response);
+                                    }
+                                });
+                                scroll_position = output.state.clamped_offset().y;
+                            },
+                        );
+                        if has_vertical_overflow {
+                            let old_position = scroll_position;
+                            let _ = ClassicScrollBar::new(
+                                &mut scroll_position,
+                                (rows.len() as f32 * row_height - visible_rows_height).max(0.0),
+                                visible_rows_height,
+                                content_height,
+                            )
+                            .palette(palette)
+                            .scroll_step(row_height)
+                            .id_salt(scrollbar_id)
+                            .show(ui);
+                            if scroll_position != old_position {
+                                pending_scroll_position = Some(scroll_position);
+                            }
+                        }
                     },
                 );
             });
+
+        ui.ctx().data_mut(|data| {
+            data.insert_temp(
+                scroll_position_id,
+                (scroll_position, pending_scroll_position),
+            );
+        });
 
         let focus = focus_response.expect("list view focus response was not created");
         if focus.has_focus() && !rows.is_empty() {
