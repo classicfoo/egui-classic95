@@ -87,7 +87,7 @@ impl<'a> ClassicListBox<'a> {
         let frame = BevelFrame::sunken()
             .palette(palette)
             .fill(palette.input)
-            .inner_margin(Margin::same(1))
+            .inner_margin(Margin::same(2))
             .show(ui, |ui| {
                 let available_width = ui.available_width();
                 ui.set_min_width(available_width);

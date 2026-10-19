@@ -139,7 +139,9 @@ impl<'a> ClassicListView<'a> {
             .map(|height| height.min(natural_rows_height))
             .unwrap_or(natural_rows_height);
         let content_height = header_height + visible_rows_height;
-        let available_width = ui.available_width().max(1.0);
+        // The frame contributes a two-point bevel on each side, so reserve that
+        // space before sizing the content and its adjacent scrollbar.
+        let available_width = (ui.available_width() - 4.0).max(1.0);
         let has_vertical_overflow = rows.len() as f32 * row_height > visible_rows_height;
         let scrollbar_width = if has_vertical_overflow {
             ClassicScrollBar::WIDTH
@@ -167,7 +169,7 @@ impl<'a> ClassicListView<'a> {
         let frame = BevelFrame::sunken()
             .palette(palette)
             .fill(palette.input)
-            .inner_margin(Margin::same(1))
+            .inner_margin(Margin::same(2))
             .show(ui, |ui| {
                 focus_response = Some(ui.interact(
                     ui.available_rect_before_wrap(),
@@ -179,6 +181,7 @@ impl<'a> ClassicListView<'a> {
                     vec2(available_width, content_height),
                     Layout::left_to_right(Align::Min),
                     |ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
                         ui.allocate_ui_with_layout(
                             vec2(content_width, content_height),
                             Layout::top_down(Align::Min),

@@ -150,7 +150,9 @@ impl<'a> ClassicTreeView<'a> {
         let visible_height = max_height
             .map(|height| height.min(natural_height))
             .unwrap_or(natural_height);
-        let available_width = ui.available_width().max(1.0);
+        // The frame contributes a two-point bevel on each side, so reserve that
+        // space before sizing the content and its adjacent scrollbar.
+        let available_width = (ui.available_width() - 4.0).max(1.0);
         let has_vertical_overflow = visible.len() as f32 * row_height > visible_height;
         let scrollbar_width = if has_vertical_overflow {
             ClassicScrollBar::WIDTH
@@ -193,7 +195,7 @@ impl<'a> ClassicTreeView<'a> {
         let frame = BevelFrame::sunken()
             .palette(palette)
             .fill(palette.input)
-            .inner_margin(Margin::same(1))
+            .inner_margin(Margin::same(2))
             .show(ui, |ui| {
                 focus_response = Some(ui.interact(
                     ui.available_rect_before_wrap(),
@@ -205,6 +207,7 @@ impl<'a> ClassicTreeView<'a> {
                     vec2(available_width, visible_height),
                     egui::Layout::left_to_right(Align::Min),
                     |ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
                         ui.allocate_ui_with_layout(
                             vec2(content_width, visible_height),
                             egui::Layout::top_down(Align::Min),

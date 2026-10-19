@@ -585,10 +585,8 @@ impl ClassicScrollButton {
         let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
         let id = self.id.unwrap_or_else(|| ui.next_auto_id());
         let response = ui.interact(rect, id, Sense::click());
-        ui.painter()
-            .rect_filled(rect, CornerRadius::ZERO, palette.face);
         let pressed = response.is_pointer_button_down_on();
-        paint_bevel(
+        paint_scrollbar_bevel(
             ui.painter(),
             rect,
             if pressed {
@@ -765,9 +763,7 @@ impl<'a> ClassicScrollBar<'a> {
                 .data_mut(|data| data.remove_temp::<f32>(drag_start_id));
         }
 
-        ui.painter()
-            .rect_filled(thumb_rect, CornerRadius::ZERO, palette.face);
-        paint_bevel(
+        paint_scrollbar_bevel(
             ui.painter(),
             thumb_rect,
             if thumb.is_pointer_button_down_on() {
@@ -779,6 +775,12 @@ impl<'a> ClassicScrollBar<'a> {
         );
         bar_response
     }
+}
+
+fn paint_scrollbar_bevel(painter: &Painter, rect: Rect, bevel: Bevel, palette: &Palette) {
+    painter.rect_filled(rect, CornerRadius::ZERO, palette.face);
+    let highlight_rect = Rect::from_min_max((rect.min + vec2(1.0, 1.0)).min(rect.max), rect.max);
+    paint_bevel(painter, highlight_rect, bevel, palette);
 }
 
 /// A classic status strip with an inset border and pixel-drawn resize grip.
