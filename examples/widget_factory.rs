@@ -11,9 +11,9 @@ use egui_classic95::{
     Bevel, BevelFrame, Classic95, ClassicButton, ClassicCheckbox, ClassicComboBox, ClassicGroupBox,
     ClassicListBox, ClassicListView, ClassicListViewColumn, ClassicMenuBar, ClassicMenuItem,
     ClassicMenuPopup, ClassicMenuSeparator, ClassicProgressBar, ClassicRadioButton,
-    ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicTabs, ClassicTextEdit,
-    ClassicToolbar, ClassicToolbarButton, ClassicTooltip, ClassicTreeNode, ClassicTreeView,
-    ClassicWindow, Palette, horizontal_separator_with_palette, paint_bevel,
+    ClassicScrollBar, ClassicSlider, ClassicStatusBar, ClassicStatusPane, ClassicTabs,
+    ClassicTextEdit, ClassicToolbar, ClassicToolbarButton, ClassicTooltip, ClassicTreeNode,
+    ClassicTreeView, ClassicWindow, Palette, horizontal_separator_with_palette, paint_bevel,
     vertical_separator_with_palette,
 };
 
@@ -1026,27 +1026,39 @@ impl FactoryApp {
 
     fn status_bar(&self, ui: &mut Ui, p: Palette) {
         ClassicStatusBar::new().palette(p).show(ui, |ui, bounds| {
-            ui.painter().text(
-                bounds.left_center() + vec2(6.0, 0.0),
-                Align2::LEFT_CENTER,
-                self.page.label(),
-                FontId::proportional(11.0),
-                p.text,
-            );
-            ui.painter().line_segment(
-                [
-                    bounds.right_top() + vec2(-103.0, 3.0),
-                    bounds.right_bottom() + vec2(-103.0, -3.0),
-                ],
-                Stroke::new(1.0, p.shadow),
-            );
-            ui.painter().text(
-                bounds.right_center() + vec2(-23.0, 0.0),
-                Align2::RIGHT_CENTER,
-                format!("Page {} of {}", self.page.index() + 1, Page::ALL.len()),
-                FontId::proportional(11.0),
-                p.text,
-            );
+            let panes_rect =
+                Rect::from_min_max(bounds.min + vec2(1.0, 1.0), bounds.max + vec2(-16.0, -1.0));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(panes_rect), |ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    ClassicStatusPane::new()
+                        .width((panes_rect.width() - 114.0).max(1.0))
+                        .height(panes_rect.height())
+                        .palette(p)
+                        .show(ui, |ui, pane| {
+                            ui.painter().text(
+                                pane.left_center() + vec2(6.0, 0.0),
+                                Align2::LEFT_CENTER,
+                                self.page.label(),
+                                FontId::proportional(11.0),
+                                p.text,
+                            );
+                        });
+                    ClassicStatusPane::new()
+                        .width(112.0)
+                        .height(panes_rect.height())
+                        .palette(p)
+                        .show(ui, |ui, pane| {
+                            ui.painter().text(
+                                pane.right_center() + vec2(-6.0, 0.0),
+                                Align2::RIGHT_CENTER,
+                                format!("Page {} of {}", self.page.index() + 1, Page::ALL.len()),
+                                FontId::proportional(11.0),
+                                p.text,
+                            );
+                        });
+                });
+            });
         });
     }
 

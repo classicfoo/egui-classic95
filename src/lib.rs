@@ -40,7 +40,7 @@ pub use chrome::{
 pub use controls::{
     ClassicCheckbox, ClassicComboArrow, ClassicComboBox, ClassicGroupBox, ClassicProgressBar,
     ClassicRadioButton, ClassicScrollBar, ClassicScrollButton, ClassicSlider, ClassicStatusBar,
-    ClassicTabs, ClassicTabsResponse, ClassicTextEdit, ScrollButtonDirection,
+    ClassicStatusPane, ClassicTabs, ClassicTabsResponse, ClassicTextEdit, ScrollButtonDirection,
 };
 pub use listbox::{ClassicListBox, ClassicListBoxResponse};
 pub use listview::{ClassicListView, ClassicListViewColumn, ClassicListViewResponse};

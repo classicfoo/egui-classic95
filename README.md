@@ -180,7 +180,7 @@ The title, icon, menu labels, menu actions, and page contents remain application
 - `ClassicTreeNode` and `ClassicTreeView` provide indented, selectable trees with dotted connectors, plus/minus expanders, keyboard navigation, and optional scrolling.
 - `ClassicToolbar` provides a reusable toolbar panel for application-defined controls. Its raised `ClassicToolbarButton`s can show a pressed selected state.
 - `ClassicTooltip` adds delayed, pointer-positioned pale-yellow tooltips to egui responses, including disabled controls.
-- `ClassicCheckbox`, `ClassicRadioButton`, `ClassicSlider`, `ClassicProgressBar`, `ClassicComboArrow`, `ClassicScrollButton`, and `ClassicStatusBar` provide reusable control visuals.
+- `ClassicCheckbox`, `ClassicRadioButton`, `ClassicSlider`, `ClassicProgressBar`, `ClassicComboArrow`, `ClassicScrollButton`, `ClassicStatusBar`, and `ClassicStatusPane` provide reusable control visuals.
 - `ClassicTextEdit` wraps egui text editing in a classic sunken input frame; `ClassicComboBox` applies a classic field, arrow, and popup style while keeping egui's selection behavior.
 
 `ClassicTextEdit`, `ClassicComboBox`, `ClassicCheckbox`, `ClassicRadioButton`, and `ClassicSlider` keep egui's editing and interaction behavior while drawing reusable classic visuals. Collapsible groups remain egui controls; `ClassicTabs` provides a reusable classic tab row and panel.

@@ -449,13 +449,7 @@ impl<'a> ClassicSlider<'a> {
                     aspect_ratio: self.handle_aspect_ratio,
                 }),
         );
-        paint_classic_slider(
-            ui,
-            palette,
-            response.rect,
-            *self.value,
-            self.range,
-        );
+        paint_classic_slider(ui, palette, response.rect, *self.value, self.range);
         response
     }
 }
@@ -1007,6 +1001,69 @@ impl ClassicStatusBar {
 }
 
 impl Default for ClassicStatusBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A recessed panel for content inside a classic status strip.
+#[derive(Clone, Copy, Debug)]
+pub struct ClassicStatusPane {
+    width: f32,
+    height: f32,
+    palette: Option<Palette>,
+}
+
+impl ClassicStatusPane {
+    /// Create a status pane 160 points wide and 21 points high.
+    pub fn new() -> Self {
+        Self {
+            width: 160.0,
+            height: 21.0,
+            palette: None,
+        }
+    }
+
+    /// Set the pane width in egui points.
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = width.max(1.0);
+        self
+    }
+
+    /// Set the pane height in egui points.
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = height.max(1.0);
+        self
+    }
+
+    /// Use a local palette instead of the one installed in the egui context.
+    pub fn palette(mut self, palette: Palette) -> Self {
+        self.palette = Some(palette);
+        self
+    }
+
+    /// Show application-defined pane content and return its outer response.
+    pub fn show<R>(
+        self,
+        ui: &mut Ui,
+        add_contents: impl FnOnce(&mut Ui, Rect) -> R,
+    ) -> InnerResponse<R> {
+        let palette = self.palette.unwrap_or_else(|| palette_for(ui.ctx()));
+        let available = ui.available_size();
+        let width = self.width.min(available.x).max(0.0);
+        let height = self.height.min(available.y).max(0.0);
+        let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        ui.painter()
+            .rect_filled(rect, CornerRadius::ZERO, palette.face);
+        paint_bevel(ui.painter(), rect, Bevel::Sunken, &palette);
+        let mut content_ui = ui.new_child(UiBuilder::new().max_rect(rect));
+        content_ui.shrink_clip_rect(rect);
+        let inner = add_contents(&mut content_ui, rect);
+        InnerResponse { inner, response }
+    }
+}
+
+impl Default for ClassicStatusPane {
     fn default() -> Self {
         Self::new()
     }
