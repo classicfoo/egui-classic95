@@ -161,6 +161,7 @@ pub struct ClassicTitleBarResponse {
     /// Clicking this response opens an application-provided system menu.
     pub system_menu: Response,
     /// Dragging this response asks egui to start dragging the native window.
+    /// Double-clicking it can be used to toggle maximization.
     pub drag: Response,
     /// Minimize button, when standard window controls are enabled.
     pub minimize: Option<Response>,
@@ -361,9 +362,10 @@ impl<'a> ClassicSystemMenu<'a> {
 /// A complete classic application window, including its frame and title bar.
 ///
 /// The component handles dragging, minimize, maximize/restore, close, and the
-/// standard system-menu actions. The application provides its icon and client
-/// contents. Native applications should disable platform decorations in their
-/// startup options (for example, `ViewportBuilder::with_decorations(false)`).
+/// standard system-menu actions. Double-clicking the draggable title-bar area
+/// toggles maximization. The application provides its icon and client contents.
+/// Native applications should disable platform decorations in their startup
+/// options (for example, `ViewportBuilder::with_decorations(false)`).
 #[derive(Clone, Debug)]
 pub struct ClassicWindow {
     title: String,
@@ -463,6 +465,11 @@ impl ClassicWindow {
                         .maximized(maximized)
                         .id(id.with("title-bar"))
                         .show(ui, draw_icon);
+
+                    if title_bar.drag.double_clicked() {
+                        ui.ctx()
+                            .send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
+                    }
 
                     ClassicSystemMenu::new(&title_bar.system_menu)
                         .palette(palette)
